@@ -11,9 +11,11 @@ export const handler = async (event) => {
     const { assign_to_user, count = 10, filters = {} } = JSON.parse(event.body || "{}");
     if (!assign_to_user) return json(400, { error: "assign_to_user required" });
 
-    // Build pool query
+    // Build pool query: must be unassigned
     let q = supa.from("leads").select("id").is("assigned_to", null).order("created_at", { ascending: true }).limit(count);
     if (filters.state) q = q.eq("state", filters.state);
+    if (filters.lead_type) q = q.eq("lead_type", filters.lead_type);
+
     const { data: pool, error: poolErr } = await q;
     if (poolErr) return json(500, { error: poolErr.message });
 
@@ -28,10 +30,8 @@ export const handler = async (event) => {
       .in("id", ids);
     if (upErr) return json(500, { error: upErr.message });
 
-    // Audit in history
-    for (const id of ids) {
-      await supa.rpc("log_assignment", { p_lead: id, p_user: assign_to_user, p_reason: "manager-assign" });
-    }
+    // Audit in history (if you created the function earlier)
+    await Promise.all(ids.map(id => supa.rpc("log_assignment", { p_lead: id, p_user: assign_to_user, p_reason: "manager-assign" })));
 
     return json(200, { assigned: ids.length });
   } catch (e) {
