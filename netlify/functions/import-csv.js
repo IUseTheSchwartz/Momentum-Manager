@@ -20,16 +20,12 @@ function parseCSV(text) {
       field += c; i++; continue;
     }
   }
-  row.push(field);
-  rows.push(row);
+  row.push(field); rows.push(row);
   while (rows.length && rows[rows.length - 1].every(v => v === "")) rows.pop();
   const headers = (rows.shift() || []).map(h => (h || "").trim());
   return { headers, rows };
 }
-
-function json(status, obj) {
-  return { statusCode: status, headers: { "Content-Type": "application/json" }, body: JSON.stringify(obj) };
-}
+function json(status, obj) { return { statusCode: status, headers: { "Content-Type": "application/json" }, body: JSON.stringify(obj) }; }
 function toE164(usPhone) {
   const digits = String(usPhone || "").replace(/\D+/g, "");
   if (!digits) return null;
@@ -60,34 +56,19 @@ function aliasToCanon(h) {
   return null;
 }
 function* chunked(arr, size) { for (let i=0;i<arr.length;i+=size) yield arr.slice(i,i+size); }
-
 function toDateISO(s) {
   if (!s) return null;
   const t = String(s).trim();
-  // Try YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
-  // Try MM/DD/YYYY
-  const mdy = t.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-  if (mdy) {
-    const [_, m, d, y] = mdy;
-    const mm = String(m).padStart(2,"0");
-    const dd = String(d).padStart(2,"0");
-    return `${y}-${mm}-${dd}`;
-  }
-  // Fallback Date parse
-  const d = new Date(t);
-  if (isNaN(d)) return null;
-  return d.toISOString().slice(0,10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;            // YYYY-MM-DD
+  const mdy = t.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/); // MM/DD/YYYY
+  if (mdy) { const [_, m, d, y] = mdy; return `${String(y)}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`; }
+  const d = new Date(t); if (isNaN(d)) return null; return d.toISOString().slice(0,10);
 }
-
 function ageFromDOB(iso) {
   if (!iso) return null;
-  const d = new Date(iso);
-  if (isNaN(d)) return null;
-  const now = new Date();
-  let a = now.getFullYear() - d.getFullYear();
-  const m = now.getMonth() - d.getMonth();
-  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) a--;
+  const d = new Date(iso); if (isNaN(d)) return null;
+  const n = new Date(); let a = n.getFullYear() - d.getFullYear();
+  const m = n.getMonth() - d.getMonth(); if (m < 0 || (m === 0 && n.getDate() < d.getDate())) a--;
   return (a >= 0 && a < 130) ? a : null;
 }
 
@@ -111,7 +92,7 @@ export const handler = async (event) => {
     const headers = parsed.headers;
     const rows = parsed.rows;
 
-    // create a file history row
+    // log file row
     const fileInsert = await supa
       .from("lead_files")
       .insert({
@@ -164,12 +145,14 @@ export const handler = async (event) => {
         dob: dobISO || null,
         age: Number.isFinite(numericAge) ? numericAge : null,
         military_branch: m.military_branch || null,
+        beneficiary_name: m.beneficiary_name || null,
+        lead_type: m.lead_type || null,
         notes: m.notes || null,
         status: "new",
       });
     }
 
-    // insert in chunks; skip duplicates by phone
+    // insert in chunks; skip dup phones
     let inserted = 0;
     for (const chunk of chunked(staged, 500)) {
       const ins = await supa.from("leads").insert(chunk).select("id");
@@ -178,8 +161,7 @@ export const handler = async (event) => {
         for (const rec of chunk) {
           if (!rec.phone_e164) { filtered.push(rec); continue; }
           const exists = await supa.from("leads").select("id").eq("phone_e164", rec.phone_e164).maybeSingle();
-          if (!exists.data) filtered.push(rec);
-          else skipped++;
+          if (!exists.data) filtered.push(rec); else skipped++;
         }
         if (filtered.length) {
           const ins2 = await supa.from("leads").insert(filtered).select("id");
