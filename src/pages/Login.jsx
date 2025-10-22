@@ -5,10 +5,8 @@ import { useNavigate, Link } from "react-router-dom";
 export default function Login() {
   const [email, setEmail] = useState(""); const [pass, setPass] = useState("");
   const [err, setErr] = useState(""); const nav = useNavigate();
-
   async function submit(e){ e.preventDefault(); setErr("");
-    try { await signIn(email, pass); nav("/leads"); } catch (e){ setErr(e.message); } }
-
+    try { await signIn(email, pass); nav("/leads"); } catch(e){ setErr(e.message); } }
   return (
     <div className="max-w-md mx-auto mt-16 card p-6">
       <h2 className="text-xl font-semibold mb-4">Login</h2>
