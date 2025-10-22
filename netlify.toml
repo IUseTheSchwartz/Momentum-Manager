@@ -10,7 +10,14 @@
   command = "npm run dev"
   port = 5173
 
-# Single Page App routing: send all routes to index.html
+# ✅ Make sure function calls aren't eaten by the SPA redirect
+[[redirects]]
+  from = "/.netlify/functions/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+  force = true
+
+# ✅ Single Page App routing: send all other routes to index.html
 [[redirects]]
   from = "/*"
   to = "/index.html"
@@ -21,3 +28,7 @@
   [headers.values]
     X-Frame-Options = "SAMEORIGIN"
     Referrer-Policy = "strict-origin-when-cross-origin"
+
+# ✅ Schedule the sweeper daily; function enforces 14-day cutoff internally
+[functions."sweep-unsold"]
+  schedule = "0 12 * * *"
