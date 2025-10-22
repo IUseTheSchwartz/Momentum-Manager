@@ -11,7 +11,7 @@ export default function ManagerLeads() {
 
   async function load() {
     const [{ data: leads }, { data: agents }] = await Promise.all([
-      supabase.from("leads").select("id,first_name,last_name,phone_e164,email,state,military_branch,dob,age,status,assigned_to,created_at").order("created_at", { ascending: false }).limit(1000),
+      supabase.from("leads").select("id,first_name,last_name,phone_e164,email,state,military_branch,dob,age,lead_type,beneficiary_name,status,assigned_to,created_at").order("created_at", { ascending: false }).limit(2000),
       supabase.from("user_profiles").select("id, full_name, email").order("full_name", { ascending: true })
     ]);
     setRows(leads || []);
@@ -26,15 +26,12 @@ export default function ManagerLeads() {
 
   async function quickAssign() {
     setStatus("Assigning…");
-    const { data: s } = await supabase.auth.getSession();
-    const manager_id = s?.session?.user?.id;
-
     const res = await fetch("/.netlify/functions/assign-leads", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ manager_id, assign_to_user: assignTo, count: Number(count) || 1, filters: { state: stateFilter || undefined } })
+      body: JSON.stringify({ assign_to_user: assignTo, count: Number(count) || 1, filters: { state: stateFilter || undefined } })
     });
-    const j = await res.json();
+    const j = await res.json().catch(()=>({}));
     if (!res.ok) { setStatus(j.error || "Failed"); return; }
     setStatus(`Assigned ${j.assigned} leads`);
     load();
@@ -66,6 +63,8 @@ export default function ManagerLeads() {
               <th className="text-left p-2">Military</th>
               <th className="text-left p-2">DOB</th>
               <th className="text-left p-2">Age</th>
+              <th className="text-left p-2">Lead Type</th>
+              <th className="text-left p-2">Beneficiary</th>
               <th className="text-left p-2">Status</th>
               <th className="text-left p-2">Assigned To</th>
             </tr>
@@ -80,11 +79,13 @@ export default function ManagerLeads() {
                 <td className="p-2">{l.military_branch || "—"}</td>
                 <td className="p-2">{l.dob || "—"}</td>
                 <td className="p-2">{(l.age ?? "") !== "" ? l.age : "—"}</td>
+                <td className="p-2">{l.lead_type || "—"}</td>
+                <td className="p-2">{l.beneficiary_name || "—"}</td>
                 <td className="p-2 capitalize">{l.status.replaceAll("_"," ")}</td>
                 <td className="p-2">{users.find(u => u.id === l.assigned_to)?.full_name || (l.assigned_to ? "—" : "Unassigned")}</td>
               </tr>
             ))}
-            {!filtered.length && <tr><td className="p-3 text-white/60" colSpan={9}>No leads.</td></tr>}
+            {!filtered.length && <tr><td className="p-3 text-white/60" colSpan={11}>No leads.</td></tr>}
           </tbody>
         </table>
       </div>
