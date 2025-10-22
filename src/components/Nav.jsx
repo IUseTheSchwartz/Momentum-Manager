@@ -6,7 +6,8 @@ export default function Nav() {
   const [role, setRole] = useState(null);
   const [authed, setAuthed] = useState(false);
   const loc = useLocation();
-  const isLanding = loc.pathname === "/";
+  const HIDE_LINKS_PATHS = new Set(["/", "/login", "/signup"]);
+  const hideLinks = HIDE_LINKS_PATHS.has(loc.pathname);
 
   useEffect(() => {
     (async () => {
@@ -30,9 +31,6 @@ export default function Nav() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  // On landing page, keep the header clean: no right-side links at all.
-  const showLinks = !isLanding;
-
   return (
     <header className="border-b border-white/10">
       <div className="max-w-6xl mx-auto flex items-center justify-between p-3">
@@ -41,7 +39,7 @@ export default function Nav() {
           <span className="font-semibold">Momentum Manager</span>
         </Link>
 
-        {showLinks && (
+        {!hideLinks && (
           <nav className="flex gap-4 text-sm items-center">
             {authed && <Link to="/leads">Leads</Link>}
             {authed && role === "manager" && (
