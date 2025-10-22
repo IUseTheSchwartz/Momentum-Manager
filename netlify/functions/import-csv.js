@@ -1,15 +1,14 @@
 import { createClient } from "@supabase/supabase-js";
 
 /* ---------- tiny CSV parser (no deps) ---------- */
-// Returns { headers: string[], rows: string[][] }
 function parseCSV(text) {
   const rows = [];
   let row = [], field = "", i = 0, q = false;
   while (i < text.length) {
     const c = text[i];
-    if (q) { // in quotes
+    if (q) {
       if (c === '"') {
-        if (text[i + 1] === '"') { field += '"'; i += 2; continue; } // escaped quote
+        if (text[i + 1] === '"') { field += '"'; i += 2; continue; }
         q = false; i++; continue;
       }
       field += c; i++; continue;
@@ -21,13 +20,9 @@ function parseCSV(text) {
       field += c; i++; continue;
     }
   }
-  // last field
   row.push(field);
   rows.push(row);
-
-  // trim trailing blank rows
   while (rows.length && rows[rows.length - 1].every(v => v === "")) rows.pop();
-
   const headers = (rows.shift() || []).map(h => (h || "").trim());
   return { headers, rows };
 }
@@ -50,10 +45,12 @@ const MAP = {
   state:      ["state","State","RR State"],
   city:       ["city","City"],
   zip:        ["zip","Zip","zipcode","Zip Code","postal","Postal Code"],
-  age:        ["age","Age","DOB","dob","Date of Birth"],
-  notes:      ["notes","Notes","beneficiary","beneficiary_name","lead_quality","favorite_hobby","Military Branch","Military Status"]
+  age:        ["age","Age"],
+  dob:        ["dob","DOB","Date of Birth","Birthdate","Birth Date"],
+  military_branch: ["Military Branch","Military","Branch","Service Branch","Military Status"],
+  notes:      ["notes","Notes","beneficiary","beneficiary_name","lead_quality","favorite_hobby"]
 };
-function canonKey(h) {
+function aliasToCanon(h) {
   const key = String(h || "").trim().toLowerCase();
   for (const [canon, aliases] of Object.entries(MAP)) {
     if (aliases.map(a => a.toLowerCase()).includes(key)) return canon;
@@ -61,6 +58,36 @@ function canonKey(h) {
   return null;
 }
 function* chunked(arr, size) { for (let i=0;i<arr.length;i+=size) yield arr.slice(i,i+size); }
+
+function toDateISO(s) {
+  if (!s) return null;
+  const t = String(s).trim();
+  // Try YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  // Try MM/DD/YYYY
+  const mdy = t.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (mdy) {
+    const [_, m, d, y] = mdy;
+    const mm = String(m).padStart(2,"0");
+    const dd = String(d).padStart(2,"0");
+    return `${y}-${mm}-${dd}`;
+  }
+  // Fallback Date parse
+  const d = new Date(t);
+  if (isNaN(d)) return null;
+  return d.toISOString().slice(0,10);
+}
+
+function ageFromDOB(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d)) return null;
+  const now = new Date();
+  let a = now.getFullYear() - d.getFullYear();
+  const m = now.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) a--;
+  return (a >= 0 && a < 130) ? a : null;
+}
 
 /* ---------- handler ---------- */
 export const handler = async (event) => {
@@ -78,7 +105,6 @@ export const handler = async (event) => {
     const { csv_text, original_filename, user_id } = payload;
     if (!csv_text) return json(400, { error: "csv_text is required" });
 
-    // parse CSV (no external deps)
     const parsed = parseCSV(csv_text);
     const headers = parsed.headers;
     const rows = parsed.rows;
@@ -98,41 +124,45 @@ export const handler = async (event) => {
     if (fileInsert.error) return json(500, { error: `lead_files insert: ${fileInsert.error.message}` });
     const fileId = fileInsert.data.id;
 
-    // map rows -> canonical
+    // header map
+    const headerMap = headers.map(h => aliasToCanon(h));
+
+    // stage
     const staged = [];
     let skipped = 0;
 
-    // Build header mapping once
-    const headerMap = headers.map(h => canonKey(h));
-
     for (const r of rows) {
-      const mapped = {};
+      const m = {};
       for (let i=0; i<headers.length; i++) {
         const canon = headerMap[i];
         const val = r[i] ?? "";
         if (canon) {
-          mapped[canon] = (mapped[canon] ?? "").toString() + (mapped[canon] ? " " : "") + String(val ?? "").trim();
+          m[canon] = (m[canon] ?? "").toString() + (m[canon] ? " " : "") + String(val ?? "").trim();
         } else if (String(val).trim()) {
-          mapped.notes = `${mapped.notes ? mapped.notes + " | " : ""}${headers[i]}: ${val}`;
+          m.notes = `${m.notes ? m.notes + " | " : ""}${headers[i]}: ${val}`;
         }
       }
 
-      const phone_e164 = toE164(mapped.phone);
-      const email = (mapped.email || "").toLowerCase().trim();
+      const phone_e164 = toE164(m.phone);
+      const email = (m.email || "").toLowerCase().trim();
       if (!phone_e164 && !email) { skipped++; continue; }
 
-      const age = mapped.age ? Number(mapped.age) : null;
+      const dobISO = toDateISO(m.dob);
+      const numericAge = m.age ? Number(m.age) : ageFromDOB(dobISO);
+
       staged.push({
         source_file_id: fileId,
-        first_name: mapped.first_name || null,
-        last_name: mapped_last(mapped) || null,
+        first_name: m.first_name || null,
+        last_name: m.last_name || null,
         phone_e164,
         email: email || null,
-        state: mapped.state || null,
-        city: mapped.city || null,
-        zip: mapped.zip || null,
-        age: Number.isFinite(age) ? age : null,
-        notes: mapped.notes || null,
+        state: m.state || null,
+        city: m.city || null,
+        zip: m.zip || null,
+        dob: dobISO || null,
+        age: Number.isFinite(numericAge) ? numericAge : null,
+        military_branch: m.military_branch || null,
+        notes: m.notes || null,
         status: "new",
       });
     }
@@ -142,7 +172,6 @@ export const handler = async (event) => {
     for (const chunk of chunked(staged, 500)) {
       const ins = await supa.from("leads").insert(chunk).select("id");
       if (ins.error) {
-        // Handle unique phone conflicts by filtering ones that already exist
         const filtered = [];
         for (const rec of chunk) {
           if (!rec.phone_e164) { filtered.push(rec); continue; }
@@ -160,7 +189,7 @@ export const handler = async (event) => {
       }
     }
 
-    // finalize file row
+    // finalize
     const upd = await supa.from("lead_files").update({
       processed_count: inserted,
       skipped_count: skipped,
@@ -168,20 +197,9 @@ export const handler = async (event) => {
     }).eq("id", fileId);
     if (upd.error) return json(500, { error: `lead_files update: ${upd.error.message}` });
 
-    return json(200, { ok: true, file_id: fileId, inserted, skipped, headers });
+    return json(200, { ok: true, file_id: fileId, inserted, skipped });
   } catch (e) {
     console.error("import-csv fatal:", e);
     return json(500, { error: String(e?.message || e) });
   }
 };
-
-// helper: try to infer last name spill if someone put full name in last_name/first_name etc.
-function mapped_last(m) {
-  if (m.last_name) return m.last_name;
-  if (m.first_name && m.first_name.includes(" ")) {
-    const parts = m.first_name.trim().split(/\s+/);
-    m.first_name = parts[0];
-    return parts.slice(1).join(" ") || null;
-  }
-  return null;
-}
