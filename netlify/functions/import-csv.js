@@ -1,9 +1,39 @@
 import { createClient } from "@supabase/supabase-js";
-import Papa from "papaparse";
 
-/* ---------- utils ---------- */
-function json(statusCode, obj) {
-  return { statusCode, headers: { "Content-Type": "application/json" }, body: JSON.stringify(obj) };
+/* ---------- tiny CSV parser (no deps) ---------- */
+// Returns { headers: string[], rows: string[][] }
+function parseCSV(text) {
+  const rows = [];
+  let row = [], field = "", i = 0, q = false;
+  while (i < text.length) {
+    const c = text[i];
+    if (q) { // in quotes
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i += 2; continue; } // escaped quote
+        q = false; i++; continue;
+      }
+      field += c; i++; continue;
+    } else {
+      if (c === '"') { q = true; i++; continue; }
+      if (c === ',') { row.push(field); field = ""; i++; continue; }
+      if (c === '\r') { i++; continue; }
+      if (c === '\n') { row.push(field); rows.push(row); row = []; field = ""; i++; continue; }
+      field += c; i++; continue;
+    }
+  }
+  // last field
+  row.push(field);
+  rows.push(row);
+
+  // trim trailing blank rows
+  while (rows.length && rows[rows.length - 1].every(v => v === "")) rows.pop();
+
+  const headers = (rows.shift() || []).map(h => (h || "").trim());
+  return { headers, rows };
+}
+
+function json(status, obj) {
+  return { statusCode: status, headers: { "Content-Type": "application/json" }, body: JSON.stringify(obj) };
 }
 function toE164(usPhone) {
   const digits = String(usPhone || "").replace(/\D+/g, "");
@@ -48,18 +78,19 @@ export const handler = async (event) => {
     const { csv_text, original_filename, user_id } = payload;
     if (!csv_text) return json(400, { error: "csv_text is required" });
 
-    // parse CSV
-    const parsed = Papa.parse(csv_text, { header: true, skipEmptyLines: true });
-    const parseWarnings = (parsed.errors || []).map(e => e.message).slice(0, 3);
+    // parse CSV (no external deps)
+    const parsed = parseCSV(csv_text);
+    const headers = parsed.headers;
+    const rows = parsed.rows;
 
-    // create a file history row (no file_path)
+    // create a file history row
     const fileInsert = await supa
       .from("lead_files")
       .insert({
         uploaded_by: user_id || null,
         file_path: null,
         original_filename: original_filename || "inline.csv",
-        row_count: (parsed.data || []).length,
+        row_count: rows.length,
         status: "received",
       })
       .select("id")
@@ -67,18 +98,25 @@ export const handler = async (event) => {
     if (fileInsert.error) return json(500, { error: `lead_files insert: ${fileInsert.error.message}` });
     const fileId = fileInsert.data.id;
 
-    // map rows
+    // map rows -> canonical
     const staged = [];
     let skipped = 0;
-    for (const row of parsed.data || []) {
+
+    // Build header mapping once
+    const headerMap = headers.map(h => canonKey(h));
+
+    for (const r of rows) {
       const mapped = {};
-      for (const [hdr, val] of Object.entries(row)) {
-        const k = canonKey(hdr);
-        if (k) mapped[k] = val;
-        else if (String(val).trim()) {
-          mapped.notes = `${mapped.notes ? mapped.notes + " | " : ""}${hdr}: ${val}`;
+      for (let i=0; i<headers.length; i++) {
+        const canon = headerMap[i];
+        const val = r[i] ?? "";
+        if (canon) {
+          mapped[canon] = (mapped[canon] ?? "").toString() + (mapped[canon] ? " " : "") + String(val ?? "").trim();
+        } else if (String(val).trim()) {
+          mapped.notes = `${mapped.notes ? mapped.notes + " | " : ""}${headers[i]}: ${val}`;
         }
       }
+
       const phone_e164 = toE164(mapped.phone);
       const email = (mapped.email || "").toLowerCase().trim();
       if (!phone_e164 && !email) { skipped++; continue; }
@@ -87,7 +125,7 @@ export const handler = async (event) => {
       staged.push({
         source_file_id: fileId,
         first_name: mapped.first_name || null,
-        last_name: mapped.last_name || null,
+        last_name: mapped_last(mapped) || null,
         phone_e164,
         email: email || null,
         state: mapped.state || null,
@@ -104,7 +142,7 @@ export const handler = async (event) => {
     for (const chunk of chunked(staged, 500)) {
       const ins = await supa.from("leads").insert(chunk).select("id");
       if (ins.error) {
-        // handle unique phone conflicts by filtering ones that already exist
+        // Handle unique phone conflicts by filtering ones that already exist
         const filtered = [];
         for (const rec of chunk) {
           if (!rec.phone_e164) { filtered.push(rec); continue; }
@@ -130,9 +168,20 @@ export const handler = async (event) => {
     }).eq("id", fileId);
     if (upd.error) return json(500, { error: `lead_files update: ${upd.error.message}` });
 
-    return json(200, { ok: true, file_id: fileId, inserted, skipped, warnings: parseWarnings });
+    return json(200, { ok: true, file_id: fileId, inserted, skipped, headers });
   } catch (e) {
     console.error("import-csv fatal:", e);
     return json(500, { error: String(e?.message || e) });
   }
 };
+
+// helper: try to infer last name spill if someone put full name in last_name/first_name etc.
+function mapped_last(m) {
+  if (m.last_name) return m.last_name;
+  if (m.first_name && m.first_name.includes(" ")) {
+    const parts = m.first_name.trim().split(/\s+/);
+    m.first_name = parts[0];
+    return parts.slice(1).join(" ") || null;
+  }
+  return null;
+}
