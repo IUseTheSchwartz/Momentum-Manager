@@ -6,11 +6,9 @@ export default function Signup() {
   const [email, setEmail] = useState(""); const [pass, setPass] = useState("");
   const [name, setName] = useState(""); const [code, setCode] = useState("");
   const [err, setErr] = useState(""); const nav = useNavigate();
-
   async function submit(e){ e.preventDefault(); setErr("");
     try { await signUp({ email, password: pass, full_name: name, code }); nav("/leads"); }
     catch(e){ setErr(e.message); } }
-
   return (
     <div className="max-w-md mx-auto mt-16 card p-6">
       <h2 className="text-xl font-semibold mb-4">Sign up</h2>
