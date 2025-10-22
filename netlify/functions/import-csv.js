@@ -85,7 +85,7 @@ export const handler = async (event) => {
 
     let payload = {};
     try { payload = JSON.parse(event.body || "{}"); } catch { return json(400, { error: "Invalid JSON body" }); }
-    const { csv_text, original_filename, user_id } = payload;
+    const { csv_text, original_filename, user_id, default_lead_type } = payload;
     if (!csv_text) return json(400, { error: "csv_text is required" });
 
     const parsed = parseCSV(csv_text);
@@ -146,7 +146,8 @@ export const handler = async (event) => {
         age: Number.isFinite(numericAge) ? numericAge : null,
         military_branch: m.military_branch || null,
         beneficiary_name: m.beneficiary_name || null,
-        lead_type: m.lead_type || null,
+        // 👇 if CSV has lead_type we use it; else we use the selected default from the UI
+        lead_type: (m.lead_type || default_lead_type || null),
         notes: m.notes || null,
         status: "new",
       });
