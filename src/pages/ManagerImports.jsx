@@ -5,7 +5,6 @@ const BUCKET = "lead_files";
 
 export default function ManagerImports() {
   const [file, setFile] = useState(null);
-  const [rows, setRows] = useState([]);
   const [status, setStatus] = useState("");
   const [history, setHistory] = useState([]);
 
@@ -20,35 +19,54 @@ export default function ManagerImports() {
   useEffect(() => { loadHistory(); }, []);
 
   async function uploadCsv() {
+    setStatus("");
     if (!file) return;
-    setStatus("Uploading…");
     const { data: sess } = await supabase.auth.getSession();
     const userId = sess?.session?.user?.id;
+    if (!userId) { setStatus("You must be logged in."); return; }
 
-    const key = new Date().toISOString().slice(0, 10).replace(/-/g, "/");
-    const filename = `${cryptoRandom()}.csv`;
-    const path = `${key}/${filename}`;
+    setStatus("Uploading…");
+    const key = new Date().toISOString().slice(0,10).replace(/-/g, "/");
+    const path = `${key}/${cryptoRandom()}.csv`;
 
-    const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, {
+    const up = await supabase.storage.from(BUCKET).upload(path, file, {
       cacheControl: "3600",
       contentType: "text/csv",
       upsert: false,
     });
-    if (upErr) { setStatus("Upload failed."); return; }
+    if (up.error) {
+      setStatus(`Upload failed: ${up.error.message}`);
+      return;
+    }
 
     setStatus("Processing…");
-    const res = await fetch("/.netlify/functions/import-csv", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-user-id": userId || "" },
-      body: JSON.stringify({
-        bucket: BUCKET,
-        file_path: path,
-        original_filename: file.name,
-      }),
-    });
-    const j = await res.json();
-    if (!res.ok) { setStatus(`Error: ${j.error || "failed"}`); return; }
-    setStatus(`Processed: inserted ${j.inserted}, skipped ${j.skipped}`);
+    let res;
+    try {
+      res = await fetch("/.netlify/functions/import-csv", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bucket: BUCKET,
+          file_path: path,
+          original_filename: file.name,
+          user_id: userId,
+        }),
+      });
+    } catch (e) {
+      setStatus(`Function call failed: ${e.message}`);
+      return;
+    }
+
+    let payload;
+    try { payload = await res.json(); }
+    catch { payload = { error: await res.text().catch(()=> "unknown error") }; }
+
+    if (!res.ok) {
+      setStatus(`Error: ${payload.error || "Unknown error"}`);
+      return;
+    }
+
+    setStatus(`Processed: inserted ${payload.inserted}, skipped ${payload.skipped}`);
     setFile(null);
     loadHistory();
   }
@@ -58,7 +76,7 @@ export default function ManagerImports() {
       <h2 className="text-xl font-semibold">Imports</h2>
 
       <div className="card p-4 space-y-3">
-        <div className="text-sm text-white/70">Upload a CSV (headers can be messy; we normalize).</div>
+        <div className="text-sm text-white/70">Upload a CSV (we normalize headers, dedupe by phone).</div>
         <input type="file" accept=".csv,text/csv" onChange={(e)=>setFile(e.target.files?.[0] || null)} />
         <button className="btn btn-primary" onClick={uploadCsv} disabled={!file}>Upload & Process</button>
         {status && <div className="text-sm text-white/70">{status}</div>}
@@ -99,6 +117,5 @@ export default function ManagerImports() {
 }
 
 function cryptoRandom() {
-  // quick random id
   return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
 }
