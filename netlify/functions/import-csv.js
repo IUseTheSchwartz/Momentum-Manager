@@ -48,7 +48,9 @@ const MAP = {
   age:        ["age","Age"],
   dob:        ["dob","DOB","Date of Birth","Birthdate","Birth Date"],
   military_branch: ["Military Branch","Military","Branch","Service Branch","Military Status"],
-  notes:      ["notes","Notes","beneficiary","beneficiary_name","lead_quality","favorite_hobby"]
+  beneficiary_name: ["beneficiary","Beneficiary","beneficiary_name","Beneficiary Name"],
+  lead_type: ["lead_type","Lead Type","Type","Product"],
+  notes:      ["notes","Notes"]
 };
 function aliasToCanon(h) {
   const key = String(h || "").trim().toLowerCase();
