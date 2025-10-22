@@ -1,20 +1,18 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 
-const BUCKET = "lead_files";
-
 export default function ManagerImports() {
   const [file, setFile] = useState(null);
   const [status, setStatus] = useState("");
   const [history, setHistory] = useState([]);
 
   async function loadHistory() {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("lead_files")
       .select("id, original_filename, row_count, processed_count, skipped_count, status, created_at")
       .order("created_at", { ascending: false })
       .limit(25);
-    if (!error) setHistory(data || []);
+    setHistory(data || []);
   }
   useEffect(() => { loadHistory(); }, []);
 
@@ -25,19 +23,8 @@ export default function ManagerImports() {
     const userId = sess?.session?.user?.id;
     if (!userId) { setStatus("You must be logged in."); return; }
 
-    setStatus("Uploading…");
-    const key = new Date().toISOString().slice(0,10).replace(/-/g, "/");
-    const path = `${key}/${cryptoRandom()}.csv`;
-
-    const up = await supabase.storage.from(BUCKET).upload(path, file, {
-      cacheControl: "3600",
-      contentType: "text/csv",
-      upsert: false,
-    });
-    if (up.error) {
-      setStatus(`Upload failed: ${up.error.message}`);
-      return;
-    }
+    setStatus("Reading…");
+    const text = await readFileAsText(file);
 
     setStatus("Processing…");
     let res;
@@ -46,10 +33,9 @@ export default function ManagerImports() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          bucket: BUCKET,
-          file_path: path,
+          csv_text: text,
           original_filename: file.name,
-          user_id: userId,
+          user_id: userId
         }),
       });
     } catch (e) {
@@ -58,17 +44,11 @@ export default function ManagerImports() {
     }
 
     let payload;
-    try {
-      payload = await res.json();
-    } catch {
-      // Not JSON — get raw text
-      const t = await res.text().catch(() => "");
-      payload = { error: t };
-    }
+    try { payload = await res.json(); }
+    catch { payload = { error: await res.text().catch(()=> "unknown error") }; }
 
     if (!res.ok) {
-      const detail = payload?.error ? ` — ${payload.error}` : "";
-      setStatus(`Error ${res.status} ${res.statusText}${detail}`);
+      setStatus(`Error ${res.status} ${res.statusText}${payload?.error ? " — " + payload.error : ""}`);
       return;
     }
 
@@ -122,6 +102,11 @@ export default function ManagerImports() {
   );
 }
 
-function cryptoRandom() {
-  return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result || ""));
+    fr.onerror = reject;
+    fr.readAsText(file);
+  });
 }
