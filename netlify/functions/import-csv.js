@@ -30,9 +30,7 @@ function canonKey(h) {
   }
   return null;
 }
-function* chunked(arr, size) {
-  for (let i = 0; i < arr.length; i += size) yield arr.slice(i, i + size);
-}
+function* chunked(arr, size) { for (let i=0;i<arr.length;i+=size) yield arr.slice(i,i+size); }
 
 /* ---------- handler ---------- */
 export const handler = async (event) => {
@@ -47,25 +45,20 @@ export const handler = async (event) => {
 
     let payload = {};
     try { payload = JSON.parse(event.body || "{}"); } catch { return json(400, { error: "Invalid JSON body" }); }
-    const { bucket, file_path, original_filename, user_id } = payload;
-    if (!bucket || !file_path) return json(400, { error: "Missing bucket or file_path" });
-
-    // download file from Storage (private bucket ok w/ service key)
-    const dl = await supa.storage.from(bucket).download(file_path);
-    if (dl.error) return json(400, { error: `Download error: ${dl.error.message}` });
-    const text = await dl.data.text();
+    const { csv_text, original_filename, user_id } = payload;
+    if (!csv_text) return json(400, { error: "csv_text is required" });
 
     // parse CSV
-    const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+    const parsed = Papa.parse(csv_text, { header: true, skipEmptyLines: true });
     const parseWarnings = (parsed.errors || []).map(e => e.message).slice(0, 3);
 
-    // register file row
+    // create a file history row (no file_path)
     const fileInsert = await supa
       .from("lead_files")
       .insert({
         uploaded_by: user_id || null,
-        file_path: `${bucket}/${file_path}`,
-        original_filename: original_filename || file_path.split("/").pop(),
+        file_path: null,
+        original_filename: original_filename || "inline.csv",
         row_count: (parsed.data || []).length,
         status: "received",
       })
