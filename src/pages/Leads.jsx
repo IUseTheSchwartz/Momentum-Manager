@@ -3,11 +3,9 @@ import { supabase } from "../lib/supabaseClient";
 
 export default function Leads() {
   const [rows, setRows] = useState([]);
-
   useEffect(() => {
     supabase.from("leads").select("*").order("created_at", { ascending:false }).then(({ data }) => setRows(data || []));
   }, []);
-
   return (
     <div className="mt-6">
       <h2 className="text-xl font-semibold mb-3">My Leads</h2>
