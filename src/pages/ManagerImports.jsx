@@ -9,12 +9,12 @@ export default function ManagerImports() {
   const [history, setHistory] = useState([]);
 
   async function loadHistory() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("lead_files")
       .select("id, original_filename, row_count, processed_count, skipped_count, status, created_at")
       .order("created_at", { ascending: false })
       .limit(25);
-    setHistory(data || []);
+    if (!error) setHistory(data || []);
   }
   useEffect(() => { loadHistory(); }, []);
 
@@ -58,11 +58,17 @@ export default function ManagerImports() {
     }
 
     let payload;
-    try { payload = await res.json(); }
-    catch { payload = { error: await res.text().catch(()=> "unknown error") }; }
+    try {
+      payload = await res.json();
+    } catch {
+      // Not JSON — get raw text
+      const t = await res.text().catch(() => "");
+      payload = { error: t };
+    }
 
     if (!res.ok) {
-      setStatus(`Error: ${payload.error || "Unknown error"}`);
+      const detail = payload?.error ? ` — ${payload.error}` : "";
+      setStatus(`Error ${res.status} ${res.statusText}${detail}`);
       return;
     }
 
@@ -76,7 +82,7 @@ export default function ManagerImports() {
       <h2 className="text-xl font-semibold">Imports</h2>
 
       <div className="card p-4 space-y-3">
-        <div className="text-sm text-white/70">Upload a CSV (we normalize headers, dedupe by phone).</div>
+        <div className="text-sm text-white/70">Upload a CSV (we normalize headers and dedupe by phone).</div>
         <input type="file" accept=".csv,text/csv" onChange={(e)=>setFile(e.target.files?.[0] || null)} />
         <button className="btn btn-primary" onClick={uploadCsv} disabled={!file}>Upload & Process</button>
         {status && <div className="text-sm text-white/70">{status}</div>}
