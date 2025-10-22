@@ -11,7 +11,7 @@ export default function ManagerLeads() {
 
   async function load() {
     const [{ data: leads }, { data: agents }] = await Promise.all([
-      supabase.from("leads").select("id,first_name,last_name,phone_e164,state,status,assigned_to,created_at").order("created_at", { ascending: false }).limit(500),
+      supabase.from("leads").select("id,first_name,last_name,phone_e164,email,state,military_branch,dob,age,status,assigned_to,created_at").order("created_at", { ascending: false }).limit(1000),
       supabase.from("user_profiles").select("id, full_name, email").order("full_name", { ascending: true })
     ]);
     setRows(leads || []);
@@ -20,7 +20,8 @@ export default function ManagerLeads() {
   useEffect(() => { load(); }, []);
 
   const filtered = useMemo(() => {
-    return rows.filter(r => (stateFilter ? (r.state || "").toUpperCase() === stateFilter.toUpperCase() : true));
+    const s = stateFilter.trim().toUpperCase();
+    return s ? rows.filter(r => (r.state || "").toUpperCase() === s) : rows;
   }, [rows, stateFilter]);
 
   async function quickAssign() {
@@ -60,7 +61,11 @@ export default function ManagerLeads() {
             <tr>
               <th className="text-left p-2">Name</th>
               <th className="text-left p-2">Phone</th>
+              <th className="text-left p-2">Email</th>
               <th className="text-left p-2">State</th>
+              <th className="text-left p-2">Military</th>
+              <th className="text-left p-2">DOB</th>
+              <th className="text-left p-2">Age</th>
               <th className="text-left p-2">Status</th>
               <th className="text-left p-2">Assigned To</th>
             </tr>
@@ -70,12 +75,16 @@ export default function ManagerLeads() {
               <tr key={l.id} className="border-t border-white/10">
                 <td className="p-2">{[l.first_name,l.last_name].filter(Boolean).join(" ") || "—"}</td>
                 <td className="p-2">{l.phone_e164 || "—"}</td>
+                <td className="p-2">{l.email || "—"}</td>
                 <td className="p-2">{l.state || "—"}</td>
-                <td className="p-2">{l.status}</td>
+                <td className="p-2">{l.military_branch || "—"}</td>
+                <td className="p-2">{l.dob || "—"}</td>
+                <td className="p-2">{(l.age ?? "") !== "" ? l.age : "—"}</td>
+                <td className="p-2 capitalize">{l.status.replaceAll("_"," ")}</td>
                 <td className="p-2">{users.find(u => u.id === l.assigned_to)?.full_name || (l.assigned_to ? "—" : "Unassigned")}</td>
               </tr>
             ))}
-            {!filtered.length && <tr><td className="p-3 text-white/60" colSpan={5}>No leads.</td></tr>}
+            {!filtered.length && <tr><td className="p-3 text-white/60" colSpan={9}>No leads.</td></tr>}
           </tbody>
         </table>
       </div>
