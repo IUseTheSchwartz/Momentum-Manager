@@ -16,10 +16,14 @@
     "react-router-dom": "^6.26.2"
   },
   "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.47",
     "prettier": "^3.3.3",
     "tailwindcss": "^3.4.13",
     "vite": "^5.4.8"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }
