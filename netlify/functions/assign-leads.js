@@ -1,39 +1,120 @@
 import { createClient } from "@supabase/supabase-js";
-function json(status, obj){ return { statusCode: status, headers: { "Content-Type":"application/json" }, body: JSON.stringify(obj) }; }
+
+function json(status, obj) {
+  return {
+    statusCode: status,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(obj),
+  };
+}
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
 
 export const handler = async (event) => {
   try {
     if (event.httpMethod !== "POST") return json(405, { error: "Method Not Allowed" });
+
     const { VITE_SUPABASE_URL, SUPABASE_SERVICE_ROLE } = process.env;
-    if (!VITE_SUPABASE_URL || !SUPABASE_SERVICE_ROLE) return json(500, { error: "Missing env" });
+    if (!VITE_SUPABASE_URL || !SUPABASE_SERVICE_ROLE) {
+      return json(500, { error: "Missing env" });
+    }
 
     const supa = createClient(VITE_SUPABASE_URL, SUPABASE_SERVICE_ROLE);
+
     const { assign_to_user, count = 10, filters = {} } = JSON.parse(event.body || "{}");
     if (!assign_to_user) return json(400, { error: "assign_to_user required" });
 
-    // Build pool query: must be unassigned
-    let q = supa.from("leads").select("id").is("assigned_to", null).order("created_at", { ascending: true }).limit(count);
-    if (filters.state) q = q.eq("state", filters.state);
-    if (filters.lead_type) q = q.eq("lead_type", filters.lead_type);
+    const want = Math.max(1, Number(count) || 1);
+    const fetchLimit = Math.min(1000, want * 10); // fetch a decent random pool
 
-    const { data: pool, error: poolErr } = await q;
-    if (poolErr) return json(500, { error: poolErr.message });
+    // 1) Get a random pool of UNASSIGNED leads with optional filters
+    let poolQ = supa
+      .from("leads")
+      .select("id")
+      .is("assigned_to", null)
+      .order("random") // randomized
+      .limit(fetchLimit);
 
-    const ids = (pool || []).map(r => r.id);
-    if (!ids.length) return json(200, { assigned: 0 });
+    if (filters.state) poolQ = poolQ.eq("state", filters.state);
+    if (filters.lead_type) poolQ = poolQ.eq("lead_type", filters.lead_type);
 
-    // Assign block
+    const { data: pool, error: poolErr } = await poolQ;
+    if (poolErr) return json(500, { error: `pool: ${poolErr.message}` });
+
+    const poolIds = (pool || []).map((r) => r.id);
+    if (!poolIds.length) return json(200, { assigned: 0 });
+
+    // 2) Build a set of IDs that HAVE EVER been assigned (from history)
+    //    (We fetch distinct lead_ids from lead_assignments; if large, you can optimize later with a materialized view or server-side SQL.)
+    const { data: hist, error: histErr } = await supa
+      .from("lead_assignments")
+      .select("lead_id")
+      .limit(100000); // adjust if you expect more; ok for now
+    if (histErr) return json(500, { error: `history: ${histErr.message}` });
+
+    const everAssigned = new Set((hist || []).map((h) => h.lead_id));
+
+    // 3) Split the random pool into never-assigned vs previously-assigned
+    const neverAssigned = [];
+    const previouslyAssigned = [];
+    for (const id of poolIds) {
+      if (everAssigned.has(id)) previouslyAssigned.push(id);
+      else neverAssigned.push(id);
+    }
+
+    // 4) Randomize within groups (pool was already random, but this is safe)
+    shuffle(neverAssigned);
+    shuffle(previouslyAssigned);
+
+    // 5) Pick N, preferring never-assigned
+    const chosen = [];
+    for (const id of neverAssigned) {
+      if (chosen.length >= want) break;
+      chosen.push(id);
+    }
+    if (chosen.length < want) {
+      for (const id of previouslyAssigned) {
+        if (chosen.length >= want) break;
+        chosen.push(id);
+      }
+    }
+
+    if (!chosen.length) return json(200, { assigned: 0 });
+
+    // 6) Assign them
     const nowISO = new Date().toISOString();
     const { error: upErr } = await supa
       .from("leads")
       .update({ assigned_to: assign_to_user, assigned_at: nowISO, status: "assigned" })
-      .in("id", ids);
-    if (upErr) return json(500, { error: upErr.message });
+      .in("id", chosen);
+    if (upErr) return json(500, { error: `update: ${upErr.message}` });
 
-    // Audit in history (if you created the function earlier)
-    await Promise.all(ids.map(id => supa.rpc("log_assignment", { p_lead: id, p_user: assign_to_user, p_reason: "manager-assign" })));
+    // 7) Audit (history log) — requires the RPC you created earlier
+    await Promise.all(
+      chosen.map((id) =>
+        supa.rpc("log_assignment", {
+          p_lead: id,
+          p_user: assign_to_user,
+          p_reason: "manager-assign",
+        })
+      )
+    );
 
-    return json(200, { assigned: ids.length });
+    return json(200, {
+      assigned: chosen.length,
+      requested: want,
+      picked_from: {
+        never_assigned: Math.min(neverAssigned.length, want),
+        previously_assigned: Math.max(0, chosen.length - Math.min(neverAssigned.length, want)),
+      },
+      filters,
+    });
   } catch (e) {
     return json(500, { error: String(e?.message || e) });
   }
