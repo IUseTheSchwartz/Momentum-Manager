@@ -22,35 +22,29 @@ export default function RoleGate({ role = "manager" }) {
           return;
         }
 
-        // 1) Try to read role from user_profiles by id
+        // 1) Check DB role
         const { data: profile, error: profErr } = await supabase
           .from("user_profiles")
           .select("role")
           .eq("id", userId)
           .maybeSingle();
 
-        if (profErr) {
-          console.warn("[RoleGate] user_profiles read error (RLS or not found):", profErr);
-        }
+        if (profErr) console.warn("[RoleGate] user_profiles read error:", profErr);
 
         const desired = String(role).trim().toLowerCase();
         const dbRole = String(profile?.role || "").trim().toLowerCase();
         let allowed = dbRole === desired;
 
-        // 2) Fallback: allow if email is in manager_whitelist
+        // 2) Fallback: email present in manager_whitelist
         if (!allowed) {
           const { data: wl, error: wlErr } = await supabase
             .from("manager_whitelist")
             .select("email")
-            .ilike("email", email) // case-insensitive match
+            .ilike("email", email)
             .maybeSingle();
 
-          if (wlErr) {
-            console.warn("[RoleGate] whitelist read error:", wlErr);
-          }
-          if (wl?.email) {
-            allowed = true;
-          }
+          if (wlErr) console.warn("[RoleGate] whitelist read error:", wlErr);
+          if (wl?.email) allowed = true;
         }
 
         if (mounted) {
@@ -69,6 +63,6 @@ export default function RoleGate({ role = "manager" }) {
     return () => { mounted = false; };
   }, [role]);
 
-  if (!ready) return null; // or a spinner
+  if (!ready) return null;
   return ok ? <Outlet /> : <Navigate to="/leads" replace />;
 }
