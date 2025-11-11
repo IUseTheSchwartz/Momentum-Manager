@@ -1,3 +1,4 @@
+// File: src/pages/ManagerLeads.jsx
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 
@@ -16,6 +17,7 @@ export default function ManagerLeads() {
   const [search, setSearch] = useState("");
 
   const [statusMsg, setStatusMsg] = useState("");
+  const [managerId, setManagerId] = useState(null);
 
   async function load() {
     const [{ data: leads }, { data: agents }] = await Promise.all([
@@ -31,8 +33,13 @@ export default function ManagerLeads() {
     setRows(leads || []);
     setUsers(agents || []);
   }
+
   useEffect(() => {
-    load();
+    (async () => {
+      const { data: s } = await supabase.auth.getSession();
+      setManagerId(s?.session?.user?.id || null);
+      await load();
+    })();
   }, []);
 
   const filtered = useMemo(() => {
@@ -63,7 +70,6 @@ export default function ManagerLeads() {
       filters: {
         state: stateFilter || undefined,
         lead_type: typeFilter || undefined,
-        // server will default to unassigned anyway; the toggle is mainly for table viewing
       },
     };
 
@@ -78,6 +84,22 @@ export default function ManagerLeads() {
       return;
     }
     setStatusMsg(`Assigned ${j.assigned} leads`);
+    load();
+  }
+
+  async function unassignOne(leadId) {
+    setStatusMsg("Unassigning…");
+    const res = await fetch("/.netlify/functions/unassign-lead", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lead_id: leadId, manager_user_id: managerId }),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setStatusMsg(j.error || "Failed to unassign");
+      return;
+    }
+    setStatusMsg(`Unassigned ${j.unassigned} lead${j.unassigned === 1 ? "" : "s"}`);
     load();
   }
 
@@ -171,6 +193,7 @@ export default function ManagerLeads() {
               <th className="text-left p-2">Beneficiary</th>
               <th className="text-left p-2">Status</th>
               <th className="text-left p-2">Assigned To</th>
+              <th className="text-left p-2">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -187,13 +210,23 @@ export default function ManagerLeads() {
                 <td className="p-2">{l.beneficiary_name || "—"}</td>
                 <td className="p-2 capitalize">{l.status.replaceAll("_", " ")}</td>
                 <td className="p-2">
-                  {users.find((u) => u.id === l.assigned_to)?.full_name || (l.assigned_to ? "—" : "Unassigned")}
+                  {users.find((u) => u.id === l.assigned_to)?.full_name ||
+                    (l.assigned_to ? "—" : "Unassigned")}
+                </td>
+                <td className="p-2">
+                  {l.assigned_to ? (
+                    <button className="btn text-xs" onClick={() => unassignOne(l.id)}>
+                      Unassign
+                    </button>
+                  ) : (
+                    <span className="text-white/40 text-xs">—</span>
+                  )}
                 </td>
               </tr>
             ))}
             {!filtered.length && (
               <tr>
-                <td className="p-3 text-white/60" colSpan={11}>
+                <td className="p-3 text-white/60" colSpan={12}>
                   No leads.
                 </td>
               </tr>
