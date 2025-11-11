@@ -15,14 +15,15 @@ export default function Signup() {
     e.preventDefault();
     setErr("");
 
-    if (!code.trim()) {
+    const trimmed = code.trim();
+    if (!trimmed) {
       setErr("An invite code is required.");
       return;
     }
 
     try {
       setBusy(true);
-      await signUp({ email, password: pass, full_name: name, code: code.trim() });
+      await signUp({ email, password: pass, full_name: name, code: trimmed });
       nav("/leads");
     } catch (e) {
       setErr(e.message || "Sign up failed.");
