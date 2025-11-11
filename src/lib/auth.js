@@ -7,8 +7,20 @@ export async function signIn(email, password) {
 }
 
 export async function signUp({ email, password, full_name, code }) {
-  if (!code || !code.trim()) {
-    throw new Error("Invite code is required.");
+  const trimmed = (code || "").trim();
+  if (!trimmed) throw new Error("Invite code is required.");
+
+  // 0) Pre-validate invite code BEFORE creating auth user
+  const pre = await fetch("/.netlify/functions/validate-invite", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, code: trimmed }),
+  });
+  let preJson = null;
+  try { preJson = await pre.json(); } catch {}
+  if (!pre.ok || !preJson?.ok) {
+    const msg = preJson?.error || preJson?.message || "Invalid or expired invite code.";
+    throw new Error(msg);
   }
 
   // 1) Create auth user with full_name in user_metadata
@@ -20,28 +32,20 @@ export async function signUp({ email, password, full_name, code }) {
   if (error) throw error;
   const user = data.user;
 
-  // 2) Immediately redeem invite with service role function
-  const resp = await fetch("/.netlify/functions/redeem-invite", {
+  // 2) Redeem invite to set role + increment usage
+  const redeem = await fetch("/.netlify/functions/redeem-invite", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      user_id: user.id,
-      email,
-      code: code.trim(),
-    }),
+    body: JSON.stringify({ user_id: user.id, email, code: trimmed }),
   });
 
-  // Parse and throw helpful errors
-  let payload = null;
-  try {
-    payload = await resp.json();
-  } catch {}
-  if (!resp.ok || !payload?.ok) {
-    // rollback option: you could signOut or alert—keeping simple here
-    const msg =
-      payload?.error ||
-      payload?.message ||
-      `Invite code invalid or expired.`;
+  let redeemJson = null;
+  try { redeemJson = await redeem.json(); } catch {}
+
+  if (!redeem.ok || !redeemJson?.ok) {
+    // Rollback UX: sign out immediately so they can't proceed with a bare account
+    try { await supabase.auth.signOut(); } catch {}
+    const msg = redeemJson?.error || redeemJson?.message || "Invite redemption failed.";
     throw new Error(msg);
   }
 
