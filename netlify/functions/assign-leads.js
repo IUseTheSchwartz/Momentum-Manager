@@ -1,3 +1,4 @@
+// File: netlify/functions/assign-leads.js
 import { createClient } from "@supabase/supabase-js";
 
 function json(status, obj) {
@@ -31,14 +32,14 @@ export const handler = async (event) => {
     if (!assign_to_user) return json(400, { error: "assign_to_user required" });
 
     const want = Math.max(1, Number(count) || 1);
-    const fetchLimit = Math.min(1000, want * 10); // fetch a decent random pool
+    const fetchLimit = Math.min(1000, want * 10); // fetch a decent slab; we'll shuffle in JS
 
-    // 1) Get a random pool of UNASSIGNED leads with optional filters
+    // 1) Get a slab of UNASSIGNED leads with optional filters (no DB-side random)
     let poolQ = supa
       .from("leads")
-      .select("id")
+      .select("id, state, lead_type, assigned_to, status")
       .is("assigned_to", null)
-      .order("random") // randomized
+      .neq("status", "sold") // don't pick sold
       .limit(fetchLimit);
 
     if (filters.state) poolQ = poolQ.eq("state", filters.state);
@@ -51,16 +52,15 @@ export const handler = async (event) => {
     if (!poolIds.length) return json(200, { assigned: 0 });
 
     // 2) Build a set of IDs that HAVE EVER been assigned (from history)
-    //    (We fetch distinct lead_ids from lead_assignments; if large, you can optimize later with a materialized view or server-side SQL.)
     const { data: hist, error: histErr } = await supa
       .from("lead_assignments")
       .select("lead_id")
-      .limit(100000); // adjust if you expect more; ok for now
+      .limit(100000);
     if (histErr) return json(500, { error: `history: ${histErr.message}` });
 
     const everAssigned = new Set((hist || []).map((h) => h.lead_id));
 
-    // 3) Split the random pool into never-assigned vs previously-assigned
+    // 3) Split into never-assigned vs previously-assigned
     const neverAssigned = [];
     const previouslyAssigned = [];
     for (const id of poolIds) {
@@ -68,7 +68,7 @@ export const handler = async (event) => {
       else neverAssigned.push(id);
     }
 
-    // 4) Randomize within groups (pool was already random, but this is safe)
+    // 4) Randomize within groups (JS shuffle)
     shuffle(neverAssigned);
     shuffle(previouslyAssigned);
 
@@ -95,7 +95,7 @@ export const handler = async (event) => {
       .in("id", chosen);
     if (upErr) return json(500, { error: `update: ${upErr.message}` });
 
-    // 7) Audit (history log) — requires the RPC you created earlier
+    // 7) Audit (history log)
     await Promise.all(
       chosen.map((id) =>
         supa.rpc("log_assignment", {
@@ -111,7 +111,10 @@ export const handler = async (event) => {
       requested: want,
       picked_from: {
         never_assigned: Math.min(neverAssigned.length, want),
-        previously_assigned: Math.max(0, chosen.length - Math.min(neverAssigned.length, want)),
+        previously_assigned: Math.max(
+          0,
+          chosen.length - Math.min(neverAssigned.length, want)
+        ),
       },
       filters,
     });
