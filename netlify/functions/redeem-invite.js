@@ -44,11 +44,10 @@ export const handler = async (event) => {
     if (invErr) return json(500, { error: "Failed to read invite code." });
     if (!inv) return json(400, { error: "Invalid invite code." });
 
-    // 2) Validate role, expiry, and usage
+    // 2) Validate role, expiry, usage
     const now = new Date();
     const expired = inv.expires_at ? new Date(inv.expires_at) <= now : false;
-    const maxUses =
-      Number.isInteger(inv?.max_uses) && inv.max_uses !== null ? inv.max_uses : null; // null = unlimited
+    const maxUses = Number.isInteger(inv?.max_uses) && inv.max_uses !== null ? inv.max_uses : null; // null = unlimited
     const currentUses = Number.isInteger(inv?.uses) ? inv.uses : 0;
     const usedUp = maxUses !== null ? currentUses >= maxUses : false;
 
@@ -58,10 +57,9 @@ export const handler = async (event) => {
     if (!["agent", "manager"].includes(role)) {
       return json(400, { error: "Invite code has no valid role." });
     }
-
     if (usedUp) return json(400, { error: "Invite code has reached its max uses." });
 
-    // 3) Optional: enforce manager allowlist by email
+    // 3) Optional: manager allowlist
     if (role === "manager") {
       const { data: wl, error: wlErr } = await supa
         .from("manager_whitelist")
@@ -72,21 +70,32 @@ export const handler = async (event) => {
       if (!wl) return json(403, { error: "Not allowlisted for manager role." });
     }
 
-    // 4) Upsert user profile with enforced role (ensures id/email set)
-    const { error: upsertErr } = await supa
+    // 4) Set user role in user_profiles:
+    // Try UPDATE first
+    const { data: updData, error: updErr } = await supa
       .from("user_profiles")
-      .upsert(
-        {
-          id: user_id,
-          email,
-          role, // enforce role from invite
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "id" }
-      );
-    if (upsertErr) return json(500, { error: "Failed to set user role." });
+      .update({ role })
+      .eq("id", user_id)
+      .select("id"); // get number of rows
+    if (updErr) {
+      // if update fails due to RLS/structure, we will attempt insert below anyway
+      console.warn("[redeem-invite] update error:", updErr);
+    }
 
-    // 5) Increment invite uses (prefer RPC if present, else guarded update)
+    let updated = Array.isArray(updData) ? updData.length : 0;
+
+    // If no row updated, INSERT minimal columns (id, email, role)
+    if (!updated) {
+      const { error: insErr } = await supa
+        .from("user_profiles")
+        .insert([{ id: user_id, email, role }]);
+      if (insErr) {
+        // If insert fails, return detailed error
+        return json(500, { error: "Failed to set user role.", detail: insErr.message || String(insErr) });
+      }
+    }
+
+    // 5) Increment invite uses (RPC preferred; fallback guarded update)
     let incOk = true;
     try {
       const { error: rpcErr } = await supa.rpc("increment_invite_uses", { p_code: code });
@@ -94,15 +103,15 @@ export const handler = async (event) => {
     } catch {
       incOk = false;
     }
-
     if (!incOk) {
-      // Fallback guarded update to reduce race risk
-      const { error: updErr } = await supa
+      const { error: updUsesErr } = await supa
         .from("invite_codes")
         .update({ uses: currentUses + 1 })
         .eq("code", code)
-        .eq("uses", currentUses); // only increment if unchanged
-      if (updErr) return json(500, { error: "Failed to increment invite usage." });
+        .eq("uses", currentUses);
+      if (updUsesErr) {
+        return json(500, { error: "Failed to increment invite usage." });
+      }
     }
 
     return json(200, { ok: true, role });
