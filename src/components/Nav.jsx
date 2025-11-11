@@ -1,3 +1,4 @@
+// File: src/components/Nav.jsx
 import { Link, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
@@ -10,25 +11,50 @@ export default function Nav() {
   const hideLinks = HIDE_LINKS_PATHS.has(loc.pathname);
 
   useEffect(() => {
-    (async () => {
-      const { data: s } = await supabase.auth.getSession();
-      const user = s?.session?.user;
+    let mounted = true;
+
+    const load = async () => {
+      const { data: s, error: sessErr } = await supabase.auth.getSession();
+      if (sessErr) console.warn("[Nav] getSession error:", sessErr);
+      const user = s?.session?.user || null;
+
+      if (!mounted) return;
       setAuthed(!!user);
-      if (user) {
-        const { data } = await supabase
-          .from("user_profiles")
-          .select("role")
-          .eq("id", user.id)
-          .single();
-        setRole(data?.role || null);
-      } else {
+
+      if (!user) {
         setRole(null);
+        return;
       }
-    })();
+
+      const { data, error } = await supabase
+        .from("user_profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (!mounted) return;
+
+      if (error) {
+        console.warn("[Nav] user_profiles read error:", error);
+        setRole(null); // never show manager on error
+        return;
+      }
+
+      setRole((data?.role || "").toLowerCase());
+    };
+
+    load();
+
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       setAuthed(!!session);
+      // Re-load role when auth changes (login, logout, token refresh)
+      load();
     });
-    return () => sub.subscription.unsubscribe();
+
+    return () => {
+      mounted = false;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   return (
@@ -42,13 +68,18 @@ export default function Nav() {
         {!hideLinks && (
           <nav className="flex gap-4 text-sm items-center">
             {authed && <Link to="/leads">Leads</Link>}
+
             {authed && role === "manager" && (
               <>
                 <Link to="/manager">Manager</Link>
                 <Link to="/manager/imports">Imports</Link>
                 <Link to="/manager/leads">All Leads</Link>
+                {/* add these if you have the routes: */}
+                {/* <Link to="/manager/invites">Invites</Link>
+                <Link to="/manager/members">Members</Link> */}
               </>
             )}
+
             {!authed ? (
               <>
                 <Link to="/login">Login</Link>
