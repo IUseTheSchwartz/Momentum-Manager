@@ -7,16 +7,29 @@ export default function ProtectedRoute() {
   const [authed, setAuthed] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
+    let mounted = true;
+
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!mounted) return;
       setAuthed(!!data.session);
-      localStorage.setItem("sb-session", JSON.stringify(data.session || {}));
+      try {
+        localStorage.setItem("sb-session", JSON.stringify(data.session || {}));
+      } catch {}
       setReady(true);
-    });
+    })();
+
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       setAuthed(!!session);
-      localStorage.setItem("sb-session", JSON.stringify(session || {}));
+      try {
+        localStorage.setItem("sb-session", JSON.stringify(session || {}));
+      } catch {}
     });
-    return () => sub.subscription.unsubscribe();
+
+    return () => {
+      mounted = false;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   if (!ready) return null;
