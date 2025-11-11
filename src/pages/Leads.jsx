@@ -20,7 +20,7 @@ export default function Leads() {
     // 1) currently assigned to me
     const cur = await supabase
       .from("leads")
-      .select("id")
+      .select("id, assigned_to, created_at")
       .eq("assigned_to", uid);
     const ids = new Set((cur.data || []).map(r => r.id));
 
@@ -42,20 +42,42 @@ export default function Leads() {
       const slice = list.slice(i, i + chunk);
       const res = await supabase
         .from("leads")
-        .select("id, first_name, last_name, phone_e164, email, state, military_branch, dob, age, lead_type, beneficiary_name, status, assigned_to, created_at")
+        .select("id, first_name, last_name, phone_e164, email, state, military_branch, dob, age, lead_type, beneficiary_name, assigned_to, created_at")
         .in("id", slice);
       if (!res.error) batched.push(...(res.data || []));
     }
 
+    // 3) fetch my per-user meta (status/DNC) for these leads
+    let metaMap = new Map();
+    for (let i = 0; i < list.length; i += chunk) {
+      const slice = list.slice(i, i + chunk);
+      const metaRes = await supabase
+        .from("lead_user_meta")
+        .select("lead_id, status, do_not_call")
+        .eq("user_id", uid)
+        .in("lead_id", slice);
+      if (!metaRes.error) {
+        (metaRes.data || []).forEach(m => {
+          metaMap.set(m.lead_id, { my_status: m.status || null, my_dnc: !!m.do_not_call });
+        });
+      }
+    }
+
+    // merge into rows
+    const merged = batched.map(r => {
+      const meta = metaMap.get(r.id) || {};
+      return { ...r, my_status: meta.my_status || null, my_dnc: !!meta.my_dnc };
+    });
+
     // sort: currently assigned first, then newest
-    batched.sort((a, b) => {
+    merged.sort((a, b) => {
       const aCur = a.assigned_to === uid ? 0 : 1;
       const bCur = b.assigned_to === uid ? 0 : 1;
       if (aCur !== bCur) return aCur - bCur;
       return new Date(b.created_at) - new Date(a.created_at);
     });
 
-    setRows(batched);
+    setRows(merged);
   }
 
   useEffect(() => {
@@ -89,9 +111,15 @@ export default function Leads() {
     });
   }, [rows, filter]);
 
-  async function setStatus(leadId, status) {
-    const { error } = await supabase.from("leads").update({ status }).eq("id", leadId);
-    if (!error) setRows(prev => prev.map(r => r.id === leadId ? { ...r, status } : r));
+  // per-user status setter
+  async function setMyStatus(leadId, status) {
+    if (!userId) return;
+    const { error } = await supabase
+      .from("lead_user_meta")
+      .upsert({ lead_id: leadId, user_id: userId, status, updated_at: new Date().toISOString() });
+    if (!error) {
+      setRows(prev => prev.map(r => r.id === leadId ? { ...r, my_status: status, my_dnc: status === "do_not_call" ? true : r.my_dnc } : r));
+    }
   }
 
   return (
@@ -119,13 +147,14 @@ export default function Leads() {
               <th className="text-left p-3">Age</th>
               <th className="text-left p-3">Lead Type</th>
               <th className="text-left p-3">Beneficiary</th>
-              <th className="text-left p-3">Status</th>
+              <th className="text-left p-3">My Status</th>
               <th className="text-left p-3">Actions</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((l) => {
-              const rowClass = STATUS_COLORS[l.status] || (l.assigned_to ? "" : "opacity-80");
+              const key = l.my_status || (l.assigned_to ? null : "unassigned");
+              const rowClass = key && STATUS_COLORS[key] ? STATUS_COLORS[key] : (l.assigned_to ? "" : "opacity-80");
               return (
                 <tr key={l.id} className={`border-t border-white/10 ${rowClass}`}>
                   <td className="p-3">{[l.first_name, l.last_name].filter(Boolean).join(" ") || "—"}</td>
@@ -138,15 +167,15 @@ export default function Leads() {
                   <td className="p-3">{l.lead_type || "—"}</td>
                   <td className="p-3">{l.beneficiary_name || "—"}</td>
                   <td className="p-3 capitalize">
-                    {l.status.replaceAll("_", " ")}
+                    {(l.my_status || "—").replaceAll("_", " ")}
                     {!l.assigned_to && <span className="ml-2 text-xs text-white/50">(returned to pool)</span>}
                   </td>
                   <td className="p-3">
                     <div className="flex flex-wrap gap-2">
-                      <button className="btn text-xs" onClick={() => setStatus(l.id, "sold")}>Sold</button>
-                      <button className="btn text-xs" onClick={() => setStatus(l.id, "no_pickup")}>No pickup</button>
-                      <button className="btn text-xs" onClick={() => setStatus(l.id, "appointment")}>Appointment</button>
-                      <button className="btn text-xs" onClick={() => setStatus(l.id, "do_not_call")}>Don’t call</button>
+                      <button className="btn text-xs" onClick={() => setMyStatus(l.id, "sold")}>Sold</button>
+                      <button className="btn text-xs" onClick={() => setMyStatus(l.id, "no_pickup")}>No pickup</button>
+                      <button className="btn text-xs" onClick={() => setMyStatus(l.id, "appointment")}>Appointment</button>
+                      <button className="btn text-xs" onClick={() => setMyStatus(l.id, "do_not_call")}>Don’t call</button>
                       <button className="btn text-xs" onClick={() => setActiveLead(l)}>Notes</button>
                     </div>
                   </td>
@@ -160,12 +189,12 @@ export default function Leads() {
         </table>
       </div>
 
-      {activeLead && <NotesDrawer lead={activeLead} onClose={() => setActiveLead(null)} />}
+      {activeLead && <NotesDrawer lead={activeLead} userId={userId} onClose={() => setActiveLead(null)} />}
     </div>
   );
 }
 
-function NotesDrawer({ lead, onClose }) {
+function NotesDrawer({ lead, userId, onClose }) {
   const [items, setItems] = useState([]);
   const [body, setBody] = useState("");
 
@@ -175,18 +204,17 @@ function NotesDrawer({ lead, onClose }) {
         .from("lead_notes")
         .select("id, body, author_id, created_at")
         .eq("lead_id", lead.id)
+        .eq("author_id", userId) // private notes (only mine)
         .order("created_at", { ascending: false });
       setItems(data || []);
     })();
-  }, [lead.id]);
+  }, [lead.id, userId]);
 
   async function addNote() {
-    if (!body.trim()) return;
-    const { data: s } = await supabase.auth.getSession();
-    const author_id = s?.session?.user?.id || null;
+    if (!body.trim() || !userId) return;
     const ins = await supabase
       .from("lead_notes")
-      .insert({ lead_id: lead.id, author_id, body: body.trim() })
+      .insert({ lead_id: lead.id, author_id: userId, body: body.trim() })
       .select("id, body, author_id, created_at")
       .single();
     if (!ins.error) {
