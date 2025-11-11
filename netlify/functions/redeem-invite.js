@@ -1,31 +1,112 @@
+// File: netlify/functions/redeem-invite.js
 import { createClient } from "@supabase/supabase-js";
+
+const json = (statusCode, bodyObj) => ({
+  statusCode,
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(bodyObj),
+});
 
 export const handler = async (event) => {
   try {
-    if (event.httpMethod !== "POST") return { statusCode: 405, body: "Method Not Allowed" };
-    const { VITE_SUPABASE_URL, SUPABASE_SERVICE_ROLE } = process.env;
-    const supa = createClient(VITE_SUPABASE_URL, SUPABASE_SERVICE_ROLE);
-    const { user_id, email, code } = JSON.parse(event.body || "{}");
-    if (!user_id || !code) return { statusCode: 400, body: "Missing" };
-
-    // fetch code
-    const { data: inv, error } = await supa.from("invite_codes").select("*").eq("code", code).single();
-    if (error || !inv) return { statusCode: 400, body: "Invalid code" };
-    if (inv.expires_at && new Date(inv.expires_at) < new Date()) return { statusCode: 400, body: "Expired" };
-    if (inv.uses >= inv.max_uses) return { statusCode: 400, body: "Code exhausted" };
-
-    // Optional: manager allowlist enforcement
-    if (inv.role_on_use === "manager") {
-      const { data: wl } = await supa.from("manager_whitelist").select("email").eq("email", email).maybeSingle();
-      if (!wl) return { statusCode: 403, body: "Not allowlisted for manager role" };
+    if (event.httpMethod !== "POST") {
+      return json(405, { error: "Method Not Allowed" });
     }
 
-    // Promote role (or keep agent)
-    await supa.from("user_profiles").update({ role: inv.role_on_use || "agent" }).eq("id", user_id);
-    await supa.from("invite_codes").update({ uses: inv.uses + 1 }).eq("code", code);
+    const { VITE_SUPABASE_URL, SUPABASE_SERVICE_ROLE, SUPABASE_SERVICE_ROLE_KEY } = process.env;
+    const SERVICE_KEY = SUPABASE_SERVICE_ROLE || SUPABASE_SERVICE_ROLE_KEY;
 
-    return { statusCode: 200, body: JSON.stringify({ ok: true }) };
+    if (!VITE_SUPABASE_URL || !SERVICE_KEY) {
+      return json(500, { error: "Server not configured for invite redemption." });
+    }
+
+    let payload = {};
+    try {
+      payload = JSON.parse(event.body || "{}");
+    } catch {
+      return json(400, { error: "Invalid JSON body." });
+    }
+
+    const { user_id, email, code } = payload;
+    if (!user_id || !email || !code) {
+      return json(400, { error: "Missing user_id, email, or code." });
+    }
+
+    const supa = createClient(VITE_SUPABASE_URL, SERVICE_KEY);
+
+    // 1) Fetch invite code
+    const { data: inv, error: invErr } = await supa
+      .from("invite_codes")
+      .select("code, role_on_use, max_uses, uses, expires_at")
+      .eq("code", code)
+      .maybeSingle();
+
+    if (invErr) return json(500, { error: "Failed to read invite code." });
+    if (!inv) return json(400, { error: "Invalid invite code." });
+
+    // 2) Validate role, expiry, and usage
+    const now = new Date();
+    const expired = inv.expires_at ? new Date(inv.expires_at) <= now : false;
+    const maxUses =
+      Number.isInteger(inv?.max_uses) && inv.max_uses !== null ? inv.max_uses : null; // null = unlimited
+    const currentUses = Number.isInteger(inv?.uses) ? inv.uses : 0;
+    const usedUp = maxUses !== null ? currentUses >= maxUses : false;
+
+    if (expired) return json(400, { error: "Invite code has expired." });
+
+    const role = (inv.role_on_use || "").toLowerCase();
+    if (!["agent", "manager"].includes(role)) {
+      return json(400, { error: "Invite code has no valid role." });
+    }
+
+    if (usedUp) return json(400, { error: "Invite code has reached its max uses." });
+
+    // 3) Optional: enforce manager allowlist by email
+    if (role === "manager") {
+      const { data: wl, error: wlErr } = await supa
+        .from("manager_whitelist")
+        .select("email")
+        .ilike("email", email)
+        .maybeSingle();
+      if (wlErr) return json(500, { error: "Allowlist check failed." });
+      if (!wl) return json(403, { error: "Not allowlisted for manager role." });
+    }
+
+    // 4) Upsert user profile with enforced role (ensures id/email set)
+    const { error: upsertErr } = await supa
+      .from("user_profiles")
+      .upsert(
+        {
+          id: user_id,
+          email,
+          role, // enforce role from invite
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "id" }
+      );
+    if (upsertErr) return json(500, { error: "Failed to set user role." });
+
+    // 5) Increment invite uses (prefer RPC if present, else guarded update)
+    let incOk = true;
+    try {
+      const { error: rpcErr } = await supa.rpc("increment_invite_uses", { p_code: code });
+      if (rpcErr) incOk = false;
+    } catch {
+      incOk = false;
+    }
+
+    if (!incOk) {
+      // Fallback guarded update to reduce race risk
+      const { error: updErr } = await supa
+        .from("invite_codes")
+        .update({ uses: currentUses + 1 })
+        .eq("code", code)
+        .eq("uses", currentUses); // only increment if unchanged
+      if (updErr) return json(500, { error: "Failed to increment invite usage." });
+    }
+
+    return json(200, { ok: true, role });
   } catch (e) {
-    return { statusCode: 500, body: JSON.stringify({ error: String(e) }) };
+    return json(500, { error: e.message || "Unknown error." });
   }
 };
