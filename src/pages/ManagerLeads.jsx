@@ -1,6 +1,6 @@
-// File: src/pages/ManagerLeads.jsx
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { fmtDMY } from "../lib/dateFmt";
 
 const LEAD_TYPES = ["FEX", "VET", "IUL", "TRUCKER", "MORTGAGE", "ILC"];
 
@@ -205,7 +205,7 @@ export default function ManagerLeads() {
                 <td className="p-2">{l.state || "—"}</td>
                 <td className="p-2">{l.lead_type || "—"}</td>
                 <td className="p-2">{l.military_branch || "—"}</td>
-                <td className="p-2">{l.dob || "—"}</td>
+                <td className="p-2">{fmtDMY(l.dob)}</td>
                 <td className="p-2">{(l.age ?? "") !== "" ? l.age : "—"}</td>
                 <td className="p-2">{l.beneficiary_name || "—"}</td>
                 <td className="p-2 capitalize">{l.status.replaceAll("_", " ")}</td>
