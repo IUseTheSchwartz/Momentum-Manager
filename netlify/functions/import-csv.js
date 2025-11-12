@@ -35,7 +35,7 @@ function toE164(usPhone) {
   return null;
 }
 
-/* ---------- header mapping ---------- */
+/* ---------- header mapping (NO "Military Status") ---------- */
 const MAP = {
   first_name: ["first_name","First Name","first","fname","First"],
   last_name:  ["last_name","Last Name","last","lname","Last"],
@@ -49,10 +49,7 @@ const MAP = {
   zip:        ["zip","Zip","zipcode","Zip Code","postal","Postal Code"],
   age:        ["age","Age"],
   dob:        ["dob","DOB","Date of Birth","Birthdate","Birth Date"],
-  // IMPORTANT: Do NOT include "Military Status" here
-  military_branch: ["Military Branch","Military","Branch","Service Branch"],
-  // capture status separately so we don't pollute branch
-  military_status: ["Military Status","Veteran Status","Service Status"],
+  military_branch: ["Military Branch","Military","Branch","Service Branch"], // branch only
   beneficiary_name: ["beneficiary","Beneficiary","beneficiary_name","Beneficiary Name"],
   lead_type: ["lead_type","Lead Type","Type","Product"],
   notes:      ["notes","Notes"]
@@ -85,7 +82,7 @@ function ageFromDOB(iso) {
   return (a >= 0 && a < 130) ? a : null;
 }
 
-/* Try to find a plausible US number anywhere in a row if phone header wasn't matched */
+/* Fallback: find a plausible US number anywhere in the row */
 function fallbackPhoneFromRow(cells) {
   for (const cell of cells) {
     const digits = String(cell || "").replace(/\D+/g, "");
@@ -145,33 +142,24 @@ export const handler = async (event) => {
         const canon = headerMap[i];
         const val = r[i] ?? "";
         const trimmed = String(val ?? "").trim();
-        if (!trimmed) continue; // leave blanks truly blank
+        if (!trimmed) continue; // keep blanks blank
 
         if (canon) {
-          // combine duplicates of same canon (rare, but safe)
           m[canon] = (m[canon] ?? "").toString() + (m[canon] ? " " : "") + trimmed;
         } else {
-          // keep unknowns in notes
           m.notes = `${m.notes ? m.notes + " | " : ""}${headers[i]}: ${trimmed}`;
         }
       }
 
-      // resolve phone: mapped first, else fallback search
+      // phone: header match first, else fallback
       let phone_e164 = toE164(m.phone);
-      if (!phone_e164) {
-        phone_e164 = fallbackPhoneFromRow(r);
-      }
+      if (!phone_e164) phone_e164 = fallbackPhoneFromRow(r);
 
       const email = (m.email || "").toLowerCase().trim();
       if (!phone_e164 && !email) { skipped_missing_contact++; continue; }
 
       const dobISO = toDateISO(m.dob);
       const numericAge = m.age ? Number(m.age) : ageFromDOB(dobISO);
-
-      // fold military_status (if present) into notes so branch stays clean
-      if (m.military_status) {
-        m.notes = `${m.notes ? m.notes + " | " : ""}Military Status: ${m.military_status}`;
-      }
 
       staged.push({
         source_file_id: fileId,
@@ -184,7 +172,7 @@ export const handler = async (event) => {
         zip: m.zip || null,
         dob: dobISO || null,
         age: Number.isFinite(numericAge) ? numericAge : null,
-        military_branch: m.military_branch || null,   // strictly branch now
+        military_branch: m.military_branch || null, // branch only, status ignored
         beneficiary_name: m.beneficiary_name || null,
         lead_type: (m.lead_type || default_lead_type || null),
         notes: m.notes || null,
@@ -192,7 +180,7 @@ export const handler = async (event) => {
       });
     }
 
-    /* === DEDUP: within-file then against DB === */
+    /* Dedup within file, then against DB */
     const seenFilePhones = new Set();
     const uniqueByFile = [];
     let skipped_file_dupes = 0;
@@ -205,7 +193,6 @@ export const handler = async (event) => {
       uniqueByFile.push(rec);
     }
 
-    // already in DB
     const phones = [...new Set(uniqueByFile.map(r => r.phone_e164).filter(Boolean))];
     const existingPhones = new Set();
     for (const batch of chunked(phones, 1000)) {
