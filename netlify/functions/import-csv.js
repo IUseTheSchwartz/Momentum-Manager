@@ -128,7 +128,7 @@ export const handler = async (event) => {
 
       const phone_e164 = toE164(m.phone);
       const email = (m.email || "").toLowerCase().trim();
-      if (!phone_e164 && !email) { skipped_missing_contact++; continue; } // need at least phone or email
+      if (!phone_e164 && !email) { skipped_missing_contact++; continue; }
 
       const dobISO = toDateISO(m.dob);
       const numericAge = m.age ? Number(m.age) : ageFromDOB(dobISO);
@@ -146,32 +146,25 @@ export const handler = async (event) => {
         age: Number.isFinite(numericAge) ? numericAge : null,
         military_branch: m.military_branch || null,
         beneficiary_name: m.beneficiary_name || null,
-        // 👇 if CSV has lead_type we use it; else we use the selected default from the UI
         lead_type: (m.lead_type || default_lead_type || null),
         notes: m.notes || null,
         status: "new",
       });
     }
 
-    /* ===========================
-       DEDUP BY PHONE (E.164)
-       ===========================
-       1) Remove duplicates within the CSV (keep first occurrence)
-       2) Remove numbers that already exist in DB
-    */
-    // 1) within-file dedup
+    // Dedup within CSV by phone
     const seenFilePhones = new Set();
     const uniqueByFile = [];
     let skipped_file_dupes = 0;
     for (const rec of staged) {
       const key = rec.phone_e164 || null;
-      if (!key) { uniqueByFile.push(rec); continue; } // allow email-only rows through
+      if (!key) { uniqueByFile.push(rec); continue; }
       if (seenFilePhones.has(key)) { skipped_file_dupes++; continue; }
       seenFilePhones.add(key);
       uniqueByFile.push(rec);
     }
 
-    // 2) against DB (phones already present)
+    // Remove phones that already exist in DB
     const phones = [...new Set(uniqueByFile.map(r => r.phone_e164).filter(Boolean))];
     const existingPhones = new Set();
     for (const batch of chunked(phones, 1000)) {
@@ -182,11 +175,10 @@ export const handler = async (event) => {
       if (error) return json(500, { error: `lookup existing phones: ${error.message}` });
       for (const row of data || []) existingPhones.add(row.phone_e164);
     }
-
     const ready = uniqueByFile.filter(r => !r.phone_e164 || !existingPhones.has(r.phone_e164));
     const skipped_existing_dupes = uniqueByFile.length - ready.length;
 
-    // insert in chunks
+    // Insert
     let inserted = 0;
     for (const chunk of chunked(ready, 500)) {
       const ins = await supa.from("leads").insert(chunk).select("id");
@@ -194,16 +186,11 @@ export const handler = async (event) => {
       inserted += ins.data?.length || 0;
     }
 
-    // finalize
+    // finalize (no skipped_breakdown column)
     const totalSkipped = skipped_missing_contact + skipped_file_dupes + skipped_existing_dupes;
     const upd = await supa.from("lead_files").update({
       processed_count: inserted,
       skipped_count: totalSkipped,
-      skipped_breakdown: {
-        missing_contact: skipped_missing_contact,
-        file_duplicates_by_phone: skipped_file_dupes,
-        existing_duplicates_by_phone: skipped_existing_dupes
-      },
       status: "processed",
     }).eq("id", fileId);
     if (upd.error) return json(500, { error: `lead_files update: ${upd.error.message}` });
