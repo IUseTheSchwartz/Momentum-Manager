@@ -15,17 +15,13 @@ export const handler = async (event) => {
 
     const { VITE_SUPABASE_URL, SUPABASE_SERVICE_ROLE, SUPABASE_SERVICE_ROLE_KEY } = process.env;
     const SERVICE_KEY = SUPABASE_SERVICE_ROLE || SUPABASE_SERVICE_ROLE_KEY;
-
     if (!VITE_SUPABASE_URL || !SERVICE_KEY) {
       return json(500, { error: "Server not configured for invite redemption." });
     }
 
     let payload = {};
-    try {
-      payload = JSON.parse(event.body || "{}");
-    } catch {
-      return json(400, { error: "Invalid JSON body." });
-    }
+    try { payload = JSON.parse(event.body || "{}"); }
+    catch { return json(400, { error: "Invalid JSON body." }); }
 
     const { user_id, email, code } = payload;
     if (!user_id || !email || !code) {
@@ -40,9 +36,8 @@ export const handler = async (event) => {
       .select("code, role_on_use, max_uses, uses, expires_at")
       .eq("code", code)
       .maybeSingle();
-
     if (invErr) return json(500, { error: "Failed to read invite code." });
-    if (!inv)  return json(400, { error: "Invalid invite code." });
+    if (!inv)   return json(400, { error: "Invalid invite code." });
 
     // 2) Validate role, expiry, usage
     const now = new Date();
@@ -59,46 +54,24 @@ export const handler = async (event) => {
     }
     if (usedUp) return json(400, { error: "Invite code has reached its max uses." });
 
-    // 3) Manager allowlist (ONLY enforce if list has entries)
-    if (role === "manager") {
-      try {
-        const wlCountQ = await supa
-          .from("manager_whitelist")
-          .select("email", { count: "exact", head: true });
+    // 3) REMOVE allowlist enforcement entirely for manager
+    // (No whitelist checks; the invite itself is the gate.)
 
-        const hasAnyWhitelist = (wlCountQ?.count ?? 0) > 0;
-
-        if (hasAnyWhitelist) {
-          const { data: wl, error: wlErr } = await supa
-            .from("manager_whitelist")
-            .select("email")
-            .ilike("email", email)
-            .maybeSingle();
-
-          if (wlErr) return json(500, { error: "Allowlist check failed." });
-          if (!wl)   return json(403, { error: "Not allowlisted for manager role." });
-        }
-        // if no whitelist rows, skip enforcement
-      } catch (e) {
-        // If the table doesn't exist or other metadata issues, skip enforcement
-        console.warn("[redeem-invite] allowlist check skipped:", e?.message || e);
-      }
-    }
-
-    // 4) Set user role in user_profiles
+    // 4) Upsert user role in user_profiles
     const { data: updData, error: updErr } = await supa
       .from("user_profiles")
       .update({ role })
       .eq("id", user_id)
       .select("id");
-
     if (updErr) {
-      console.warn("[redeem-invite] update error:", updErr);
-    }
-
-    let updated = Array.isArray(updData) ? updData.length : 0;
-
-    if (!updated) {
+      // try insert if no row
+      const { error: insErr } = await supa
+        .from("user_profiles")
+        .insert([{ id: user_id, email, role }]);
+      if (insErr) {
+        return json(500, { error: "Failed to set user role.", detail: insErr.message || String(insErr) });
+      }
+    } else if (!updData?.length) {
       const { error: insErr } = await supa
         .from("user_profiles")
         .insert([{ id: user_id, email, role }]);
@@ -112,18 +85,15 @@ export const handler = async (event) => {
     try {
       const { error: rpcErr } = await supa.rpc("increment_invite_uses", { p_code: code });
       if (rpcErr) incOk = false;
-    } catch {
-      incOk = false;
-    }
+    } catch { incOk = false; }
+
     if (!incOk) {
       const { error: updUsesErr } = await supa
         .from("invite_codes")
         .update({ uses: currentUses + 1 })
         .eq("code", code)
         .eq("uses", currentUses);
-      if (updUsesErr) {
-        return json(500, { error: "Failed to increment invite usage." });
-      }
+      if (updUsesErr) return json(500, { error: "Failed to increment invite usage." });
     }
 
     return json(200, { ok: true, role });
