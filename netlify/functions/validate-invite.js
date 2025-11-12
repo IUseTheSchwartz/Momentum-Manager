@@ -23,6 +23,7 @@ export const handler = async (event) => {
 
     const supa = createClient(VITE_SUPABASE_URL, SERVICE_KEY);
 
+    // Fetch invite
     const { data: inv, error: invErr } = await supa
       .from("invite_codes")
       .select("code, role_on_use, max_uses, uses, expires_at")
@@ -30,29 +31,44 @@ export const handler = async (event) => {
       .maybeSingle();
 
     if (invErr) return json(500, { error: "Failed to read invite code." });
-    if (!inv) return json(400, { error: "Invalid invite code." });
+    if (!inv)  return json(400, { error: "Invalid invite code." });
 
+    // Validate common constraints
     const now = new Date();
     const expired = inv.expires_at ? new Date(inv.expires_at) <= now : false;
-    const maxUses =
-      Number.isInteger(inv?.max_uses) && inv.max_uses !== null ? inv.max_uses : null; // null = unlimited
+    const maxUses = Number.isInteger(inv?.max_uses) && inv.max_uses !== null ? inv.max_uses : null; // null = unlimited
     const current = Number.isInteger(inv?.uses) ? inv.uses : 0;
     const usedUp = maxUses !== null ? current >= maxUses : false;
     const role = (inv.role_on_use || "").toLowerCase();
 
     if (expired) return json(400, { error: "Invite code has expired." });
     if (!["agent", "manager"].includes(role)) return json(400, { error: "Invite code has no valid role." });
-    if (usedUp) return json(400, { error: "Invite code has reached its max uses." });
+    if (usedUp)  return json(400, { error: "Invite code has reached its max uses." });
 
-    // If manager code, email must be allowlisted
+    // Manager allowlist: enforce ONLY if the table has entries; otherwise skip
     if (role === "manager") {
-      const { data: wl, error: wlErr } = await supa
-        .from("manager_whitelist")
-        .select("email")
-        .ilike("email", email)
-        .maybeSingle();
-      if (wlErr) return json(500, { error: "Allowlist check failed." });
-      if (!wl) return json(403, { error: "Not allowlisted for manager role." });
+      try {
+        const countRes = await supa
+          .from("manager_whitelist")
+          .select("email", { count: "exact", head: true });
+
+        const hasAny = (countRes?.count ?? 0) > 0;
+
+        if (hasAny) {
+          const { data: wl, error: wlErr } = await supa
+            .from("manager_whitelist")
+            .select("email")
+            .ilike("email", email)
+            .maybeSingle();
+
+          if (wlErr) return json(500, { error: "Allowlist check failed." });
+          if (!wl)   return json(403, { error: "Not allowlisted for manager role." });
+        }
+        // if table empty, no enforcement
+      } catch (e) {
+        // If table missing or other metadata error, skip enforcement
+        console.warn("[validate-invite] allowlist skipped:", e?.message || e);
+      }
     }
 
     return json(200, { ok: true, role });
