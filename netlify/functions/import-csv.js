@@ -26,6 +26,7 @@ function parseCSV(text) {
   return { headers, rows };
 }
 function json(status, obj) { return { statusCode: status, headers: { "Content-Type": "application/json" }, body: JSON.stringify(obj) }; }
+
 function toE164(usPhone) {
   const digits = String(usPhone || "").replace(/\D+/g, "");
   if (!digits) return null;
@@ -33,21 +34,30 @@ function toE164(usPhone) {
   if (digits.length === 10) return "+1" + digits;
   return null;
 }
+
+/* ---------- header mapping ---------- */
 const MAP = {
-  first_name: ["first_name","First Name","first","fname"],
-  last_name:  ["last_name","Last Name","last","lname"],
-  phone:      ["phone","Phone","phone_number","Phone Number","mobile","Mobile","Phone #"],
-  email:      ["email","Email","e-mail"],
+  first_name: ["first_name","First Name","first","fname","First"],
+  last_name:  ["last_name","Last Name","last","lname","Last"],
+  phone: [
+    "phone","Phone","phone_number","Phone Number","mobile","Mobile","Phone #",
+    "Primary Phone","Cell","Cell Phone","Telephone","Best Phone","Phone1","Phone 1"
+  ],
+  email:      ["email","Email","e-mail","Email Address"],
   state:      ["state","State","RR State"],
   city:       ["city","City"],
   zip:        ["zip","Zip","zipcode","Zip Code","postal","Postal Code"],
   age:        ["age","Age"],
   dob:        ["dob","DOB","Date of Birth","Birthdate","Birth Date"],
-  military_branch: ["Military Branch","Military","Branch","Service Branch","Military Status"],
+  // IMPORTANT: Do NOT include "Military Status" here
+  military_branch: ["Military Branch","Military","Branch","Service Branch"],
+  // capture status separately so we don't pollute branch
+  military_status: ["Military Status","Veteran Status","Service Status"],
   beneficiary_name: ["beneficiary","Beneficiary","beneficiary_name","Beneficiary Name"],
   lead_type: ["lead_type","Lead Type","Type","Product"],
   notes:      ["notes","Notes"]
 };
+
 function aliasToCanon(h) {
   const key = String(h || "").trim().toLowerCase();
   for (const [canon, aliases] of Object.entries(MAP)) {
@@ -55,7 +65,9 @@ function aliasToCanon(h) {
   }
   return null;
 }
+
 function* chunked(arr, size) { for (let i=0;i<arr.length;i+=size) yield arr.slice(i,i+size); }
+
 function toDateISO(s) {
   if (!s) return null;
   const t = String(s).trim();
@@ -64,12 +76,25 @@ function toDateISO(s) {
   if (mdy) { const [_, m, d, y] = mdy; return `${String(y)}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`; }
   const d = new Date(t); if (isNaN(d)) return null; return d.toISOString().slice(0,10);
 }
+
 function ageFromDOB(iso) {
   if (!iso) return null;
   const d = new Date(iso); if (isNaN(d)) return null;
   const n = new Date(); let a = n.getFullYear() - d.getFullYear();
   const m = n.getMonth() - d.getMonth(); if (m < 0 || (m === 0 && n.getDate() < d.getDate())) a--;
   return (a >= 0 && a < 130) ? a : null;
+}
+
+/* Try to find a plausible US number anywhere in a row if phone header wasn't matched */
+function fallbackPhoneFromRow(cells) {
+  for (const cell of cells) {
+    const digits = String(cell || "").replace(/\D+/g, "");
+    if (digits.length === 10 || (digits.length === 11 && digits.startsWith("1"))) {
+      const e = toE164(digits);
+      if (e) return e;
+    }
+  }
+  return null;
 }
 
 /* ---------- handler ---------- */
@@ -92,7 +117,7 @@ export const handler = async (event) => {
     const headers = parsed.headers;
     const rows = parsed.rows;
 
-    // log file row
+    // file log
     const fileInsert = await supa
       .from("lead_files")
       .insert({
@@ -119,19 +144,34 @@ export const handler = async (event) => {
       for (let i=0; i<headers.length; i++) {
         const canon = headerMap[i];
         const val = r[i] ?? "";
+        const trimmed = String(val ?? "").trim();
+        if (!trimmed) continue; // leave blanks truly blank
+
         if (canon) {
-          m[canon] = (m[canon] ?? "").toString() + (m[canon] ? " " : "") + String(val ?? "").trim();
-        } else if (String(val).trim()) {
-          m.notes = `${m.notes ? m.notes + " | " : ""}${headers[i]}: ${val}`;
+          // combine duplicates of same canon (rare, but safe)
+          m[canon] = (m[canon] ?? "").toString() + (m[canon] ? " " : "") + trimmed;
+        } else {
+          // keep unknowns in notes
+          m.notes = `${m.notes ? m.notes + " | " : ""}${headers[i]}: ${trimmed}`;
         }
       }
 
-      const phone_e164 = toE164(m.phone);
+      // resolve phone: mapped first, else fallback search
+      let phone_e164 = toE164(m.phone);
+      if (!phone_e164) {
+        phone_e164 = fallbackPhoneFromRow(r);
+      }
+
       const email = (m.email || "").toLowerCase().trim();
       if (!phone_e164 && !email) { skipped_missing_contact++; continue; }
 
       const dobISO = toDateISO(m.dob);
       const numericAge = m.age ? Number(m.age) : ageFromDOB(dobISO);
+
+      // fold military_status (if present) into notes so branch stays clean
+      if (m.military_status) {
+        m.notes = `${m.notes ? m.notes + " | " : ""}Military Status: ${m.military_status}`;
+      }
 
       staged.push({
         source_file_id: fileId,
@@ -144,7 +184,7 @@ export const handler = async (event) => {
         zip: m.zip || null,
         dob: dobISO || null,
         age: Number.isFinite(numericAge) ? numericAge : null,
-        military_branch: m.military_branch || null,
+        military_branch: m.military_branch || null,   // strictly branch now
         beneficiary_name: m.beneficiary_name || null,
         lead_type: (m.lead_type || default_lead_type || null),
         notes: m.notes || null,
@@ -152,19 +192,20 @@ export const handler = async (event) => {
       });
     }
 
-    // Dedup within CSV by phone
+    /* === DEDUP: within-file then against DB === */
     const seenFilePhones = new Set();
     const uniqueByFile = [];
     let skipped_file_dupes = 0;
+
     for (const rec of staged) {
       const key = rec.phone_e164 || null;
-      if (!key) { uniqueByFile.push(rec); continue; }
+      if (!key) { uniqueByFile.push(rec); continue; } // allow email-only
       if (seenFilePhones.has(key)) { skipped_file_dupes++; continue; }
       seenFilePhones.add(key);
       uniqueByFile.push(rec);
     }
 
-    // Remove phones that already exist in DB
+    // already in DB
     const phones = [...new Set(uniqueByFile.map(r => r.phone_e164).filter(Boolean))];
     const existingPhones = new Set();
     for (const batch of chunked(phones, 1000)) {
@@ -175,10 +216,11 @@ export const handler = async (event) => {
       if (error) return json(500, { error: `lookup existing phones: ${error.message}` });
       for (const row of data || []) existingPhones.add(row.phone_e164);
     }
+
     const ready = uniqueByFile.filter(r => !r.phone_e164 || !existingPhones.has(r.phone_e164));
     const skipped_existing_dupes = uniqueByFile.length - ready.length;
 
-    // Insert
+    // insert
     let inserted = 0;
     for (const chunk of chunked(ready, 500)) {
       const ins = await supa.from("leads").insert(chunk).select("id");
@@ -186,7 +228,7 @@ export const handler = async (event) => {
       inserted += ins.data?.length || 0;
     }
 
-    // finalize (no skipped_breakdown column)
+    // finalize
     const totalSkipped = skipped_missing_contact + skipped_file_dupes + skipped_existing_dupes;
     const upd = await supa.from("lead_files").update({
       processed_count: inserted,
