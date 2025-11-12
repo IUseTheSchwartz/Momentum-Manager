@@ -42,12 +42,12 @@ export const handler = async (event) => {
       .maybeSingle();
 
     if (invErr) return json(500, { error: "Failed to read invite code." });
-    if (!inv) return json(400, { error: "Invalid invite code." });
+    if (!inv)  return json(400, { error: "Invalid invite code." });
 
     // 2) Validate role, expiry, usage
     const now = new Date();
     const expired = inv.expires_at ? new Date(inv.expires_at) <= now : false;
-    const maxUses = Number.isInteger(inv?.max_uses) && inv.max_uses !== null ? inv.max_uses : null; // null = unlimited
+    const maxUses = Number.isInteger(inv?.max_uses) && inv.max_uses !== null ? inv.max_uses : null;
     const currentUses = Number.isInteger(inv?.uses) ? inv.uses : 0;
     const usedUp = maxUses !== null ? currentUses >= maxUses : false;
 
@@ -59,38 +59,50 @@ export const handler = async (event) => {
     }
     if (usedUp) return json(400, { error: "Invite code has reached its max uses." });
 
-    // 3) Optional: manager allowlist
+    // 3) Manager allowlist (ONLY enforce if list has entries)
     if (role === "manager") {
-      const { data: wl, error: wlErr } = await supa
-        .from("manager_whitelist")
-        .select("email")
-        .ilike("email", email)
-        .maybeSingle();
-      if (wlErr) return json(500, { error: "Allowlist check failed." });
-      if (!wl) return json(403, { error: "Not allowlisted for manager role." });
+      try {
+        const wlCountQ = await supa
+          .from("manager_whitelist")
+          .select("email", { count: "exact", head: true });
+
+        const hasAnyWhitelist = (wlCountQ?.count ?? 0) > 0;
+
+        if (hasAnyWhitelist) {
+          const { data: wl, error: wlErr } = await supa
+            .from("manager_whitelist")
+            .select("email")
+            .ilike("email", email)
+            .maybeSingle();
+
+          if (wlErr) return json(500, { error: "Allowlist check failed." });
+          if (!wl)   return json(403, { error: "Not allowlisted for manager role." });
+        }
+        // if no whitelist rows, skip enforcement
+      } catch (e) {
+        // If the table doesn't exist or other metadata issues, skip enforcement
+        console.warn("[redeem-invite] allowlist check skipped:", e?.message || e);
+      }
     }
 
-    // 4) Set user role in user_profiles:
-    // Try UPDATE first
+    // 4) Set user role in user_profiles
     const { data: updData, error: updErr } = await supa
       .from("user_profiles")
       .update({ role })
       .eq("id", user_id)
-      .select("id"); // get number of rows
+      .select("id");
+
     if (updErr) {
-      // if update fails due to RLS/structure, we will attempt insert below anyway
       console.warn("[redeem-invite] update error:", updErr);
     }
 
     let updated = Array.isArray(updData) ? updData.length : 0;
 
-    // If no row updated, INSERT minimal columns (id, email, role)
     if (!updated) {
       const { error: insErr } = await supa
         .from("user_profiles")
         .insert([{ id: user_id, email, role }]);
       if (insErr) {
-        // If insert fails, return detailed error
         return json(500, { error: "Failed to set user role.", detail: insErr.message || String(insErr) });
       }
     }
