@@ -1,3 +1,4 @@
+// File: src/pages/Leads.jsx
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 
@@ -168,7 +169,6 @@ export default function Leads() {
                   <td className="p-3">{l.beneficiary_name || "—"}</td>
                   <td className="p-3 capitalize">
                     {(l.my_status || "—").replaceAll("_", " ")}
-                    {!l.assigned_to && <span className="ml-2 text-xs text-white/50">(returned to pool)</span>}
                   </td>
                   <td className="p-3">
                     <div className="flex flex-wrap gap-2">
