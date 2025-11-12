@@ -1,19 +1,19 @@
-export function fmtDMY(input) {
+export function fmtMDY(input) {
   if (!input) return "—";
   const s = String(input).trim();
 
-  // If it's a plain date (YYYY-MM-DD), avoid timezone shifts:
+  // If it's YYYY-MM-DD, avoid timezone shifts
   const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (m) {
     const [, y, mo, d] = m;
-    return `${d}-${mo}-${y}`;
+    return `${mo}-${d}-${y}`;
   }
 
   // Otherwise try to parse (timestamp/ISO)
   const d = new Date(s);
   if (isNaN(d)) return s;
-  const dd = String(d.getDate()).padStart(2, "0");
   const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
   const yyyy = d.getFullYear();
-  return `${dd}-${mm}-${yyyy}`;
+  return `${mm}-${dd}-${yyyy}`;
 }
