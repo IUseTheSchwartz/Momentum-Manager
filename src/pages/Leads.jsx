@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { fmtDMY } from "../lib/dateFmt";
+import { fmtMDY } from "../lib/dateFmt";
 
 const STATUS_COLORS = {
   sold: "bg-green-900/30",
@@ -163,7 +163,7 @@ export default function Leads() {
                   <td className="p-3">{l.email || "—"}</td>
                   <td className="p-3">{l.state || "—"}</td>
                   <td className="p-3">{l.military_branch || "—"}</td>
-                  <td className="p-3">{fmtDMY(l.dob)}</td>
+                  <td className="p-3">{fmtMDY(l.dob)}</td>
                   <td className="p-3">{(l.age ?? "") !== "" ? l.age : "—"}</td>
                   <td className="p-3">{l.lead_type || "—"}</td>
                   <td className="p-3">{l.beneficiary_name || "—"}</td>
