@@ -112,7 +112,7 @@ export const handler = async (event) => {
 
     // stage
     const staged = [];
-    let skipped = 0;
+    let skipped_missing_contact = 0;
 
     for (const r of rows) {
       const m = {};
@@ -128,7 +128,7 @@ export const handler = async (event) => {
 
       const phone_e164 = toE164(m.phone);
       const email = (m.email || "").toLowerCase().trim();
-      if (!phone_e164 && !email) { skipped++; continue; }
+      if (!phone_e164 && !email) { skipped_missing_contact++; continue; } // need at least phone or email
 
       const dobISO = toDateISO(m.dob);
       const numericAge = m.age ? Number(m.age) : ageFromDOB(dobISO);
@@ -153,36 +153,72 @@ export const handler = async (event) => {
       });
     }
 
-    // insert in chunks; skip dup phones
+    /* ===========================
+       DEDUP BY PHONE (E.164)
+       ===========================
+       1) Remove duplicates within the CSV (keep first occurrence)
+       2) Remove numbers that already exist in DB
+    */
+    // 1) within-file dedup
+    const seenFilePhones = new Set();
+    const uniqueByFile = [];
+    let skipped_file_dupes = 0;
+    for (const rec of staged) {
+      const key = rec.phone_e164 || null;
+      if (!key) { uniqueByFile.push(rec); continue; } // allow email-only rows through
+      if (seenFilePhones.has(key)) { skipped_file_dupes++; continue; }
+      seenFilePhones.add(key);
+      uniqueByFile.push(rec);
+    }
+
+    // 2) against DB (phones already present)
+    const phones = [...new Set(uniqueByFile.map(r => r.phone_e164).filter(Boolean))];
+    const existingPhones = new Set();
+    for (const batch of chunked(phones, 1000)) {
+      const { data, error } = await supa
+        .from("leads")
+        .select("phone_e164")
+        .in("phone_e164", batch);
+      if (error) return json(500, { error: `lookup existing phones: ${error.message}` });
+      for (const row of data || []) existingPhones.add(row.phone_e164);
+    }
+
+    const ready = uniqueByFile.filter(r => !r.phone_e164 || !existingPhones.has(r.phone_e164));
+    const skipped_existing_dupes = uniqueByFile.length - ready.length;
+
+    // insert in chunks
     let inserted = 0;
-    for (const chunk of chunked(staged, 500)) {
+    for (const chunk of chunked(ready, 500)) {
       const ins = await supa.from("leads").insert(chunk).select("id");
-      if (ins.error) {
-        const filtered = [];
-        for (const rec of chunk) {
-          if (!rec.phone_e164) { filtered.push(rec); continue; }
-          const exists = await supa.from("leads").select("id").eq("phone_e164", rec.phone_e164).maybeSingle();
-          if (!exists.data) filtered.push(rec); else skipped++;
-        }
-        if (filtered.length) {
-          const ins2 = await supa.from("leads").insert(filtered).select("id");
-          if (ins2.error) return json(500, { error: `Insert error: ${ins2.error.message}` });
-          inserted += ins2.data?.length || 0;
-        }
-      } else {
-        inserted += ins.data?.length || 0;
-      }
+      if (ins.error) return json(500, { error: `Insert error: ${ins.error.message}` });
+      inserted += ins.data?.length || 0;
     }
 
     // finalize
+    const totalSkipped = skipped_missing_contact + skipped_file_dupes + skipped_existing_dupes;
     const upd = await supa.from("lead_files").update({
       processed_count: inserted,
-      skipped_count: skipped,
+      skipped_count: totalSkipped,
+      skipped_breakdown: {
+        missing_contact: skipped_missing_contact,
+        file_duplicates_by_phone: skipped_file_dupes,
+        existing_duplicates_by_phone: skipped_existing_dupes
+      },
       status: "processed",
     }).eq("id", fileId);
     if (upd.error) return json(500, { error: `lead_files update: ${upd.error.message}` });
 
-    return json(200, { ok: true, file_id: fileId, inserted, skipped });
+    return json(200, {
+      ok: true,
+      file_id: fileId,
+      inserted,
+      skipped: totalSkipped,
+      breakdown: {
+        missing_contact: skipped_missing_contact,
+        file_duplicates_by_phone: skipped_file_dupes,
+        existing_duplicates_by_phone: skipped_existing_dupes
+      }
+    });
   } catch (e) {
     console.error("import-csv fatal:", e);
     return json(500, { error: String(e?.message || e) });
