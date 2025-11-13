@@ -90,8 +90,6 @@ export default function Landing() {
           </div>
 
           <p className="mt-10 text-xs text-white/50">
-            Bookmark this page. When you&apos;re ready to work, start here and
-            use the menu to get where you need to go.
           </p>
         </section>
       </main>
