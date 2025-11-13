@@ -7,7 +7,7 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen text-white">
-      {/* Page-level header: only hamburger on the right */}
+      {/* Page header: hamburger only */}
       <header className="flex items-center justify-end px-6 py-4">
         <div className="relative">
           <button
@@ -21,14 +21,7 @@ export default function Landing() {
           </button>
 
           {menuOpen && (
-            <div
-              className="
-                absolute right-0 mt-2 w-56 rounded-2xl
-                bg-slate-950/95 border border-white/10
-                shadow-lg backdrop-blur-md
-                text-sm text-white z-20
-              "
-            >
+            <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-slate-950/95 border border-white/10 shadow-lg backdrop-blur-md text-sm text-white z-20">
               <Link
                 to="/momentum-lead-manager"
                 className="block px-4 py-2 hover:bg-white/5"
@@ -48,65 +41,49 @@ export default function Landing() {
         </div>
       </header>
 
-      {/* Hero / Intro */}
+      {/* Internal hub hero */}
       <main className="px-6 pb-24">
         <section className="max-w-3xl mx-auto pt-10 text-center">
           <p className="text-sm uppercase tracking-[0.25em] text-emerald-400/80 mb-3">
             MOMENTUM MANAGER
           </p>
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold leading-tight mb-4">
-            The system that turns{" "}
-            <span className="text-emerald-400">effort</span> into{" "}
-            <span className="text-emerald-400">income</span>.
+            Tools for Momentum Financial agents.
           </h2>
           <p className="text-sm sm:text-base text-white/70 mb-6">
-            This isn&apos;t a &quot;hop in a Discord and hope&quot; team.
-            We run like a business: live training, real accountability,
-            a proven script, and leads that reward the agents who show up.
+            This is the internal hub for the team. Use the menu to jump into
+            the lead manager, get your personal landing page, and stay plugged
+            into the systems we run every day.
           </p>
 
           <div className="grid gap-4 md:grid-cols-3 text-left mt-8">
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <h3 className="text-sm font-semibold mb-1">What to expect</h3>
+              <h3 className="text-sm font-semibold mb-1">Lead manager</h3>
               <p className="text-xs text-white/70">
-                Daily dials, live calls, and clear non-negotiables. If you&apos;re
-                coachable and consistent, the system will carry you further than
-                motivation ever will.
+                See what&apos;s in your queue, claim leads when they&apos;re live,
+                and keep the pipeline moving. If you&apos;re here to work, this is
+                where you live.
               </p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-  <h3 className="text-sm font-semibold mb-1">How we operate</h3>
-  <p className="text-xs text-white/70">
-    No hype, just standards. We show up every day, cameras on, phones dialed,
-    and do the work whether we feel like it or not. If you&apos;re not ready
-    to treat this like your main thing, this isn&apos;t your team.
-  </p>
-</div>
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <h3 className="text-sm font-semibold mb-1">What we provide</h3>
+              <h3 className="text-sm font-semibold mb-1">Agent assets</h3>
               <p className="text-xs text-white/70">
-                Lead flow, scripts, call recordings, CRM, and a team that&apos;s
-                actually winning — not just talking. You bring the work ethic.
+                Get your personal landing page and tools built around how we
+                sell, so everything you send clients looks clean and on-brand.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <h3 className="text-sm font-semibold mb-1">How we move</h3>
+              <p className="text-xs text-white/70">
+                Show up, plug in, and execute. This hub is here to make the work
+                easier to do every day — the grind still has to come from you.
               </p>
             </div>
           </div>
 
-          {/* Single Join Team button -> Logan's landing page */}
-          <div className="mt-8 flex justify-center">
-            <a
-              href="https://logantharris.com"
-              target="_blank"
-              rel="noreferrer"
-              className="btn btn-primary"
-            >
-              Join Team
-            </a>
-          </div>
-
-          <p className="mt-4 text-xs text-white/50">
-            If you&apos;re looking for &quot;easy&quot;, this isn&apos;t it.
-            If you&apos;re looking for a framework to outwork everyone else, you&apos;re in
-            the right place.
+          <p className="mt-10 text-xs text-white/50">
+            Bookmark this page. When you&apos;re ready to work, start here and
+            use the menu to get where you need to go.
           </p>
         </section>
       </main>
