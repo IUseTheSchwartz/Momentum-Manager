@@ -1,3 +1,4 @@
+// File: src/pages/Landing.jsx
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -63,17 +64,7 @@ export default function Landing() {
             into the systems we run every day.
           </p>
 
-          {/* Primary CTA: Sign up with code */}
-          <div className="flex justify-center mb-8">
-            <Link
-              to="/signup"
-              className="btn btn-primary inline-flex items-center justify-center px-6 py-2.5 text-sm font-semibold"
-            >
-              Sign up with code
-            </Link>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-3 text-left mt-4">
+          <div className="grid gap-4 md:grid-cols-3 text-left mt-8">
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
               <h3 className="text-sm font-semibold mb-1">Lead manager</h3>
               <p className="text-xs text-white/70">
