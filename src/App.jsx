@@ -5,6 +5,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import Landing from "./pages/Landing.jsx";
 import Login from "./pages/Login.jsx";
 import Signup from "./pages/Signup.jsx";
+import MomentumLeadManager from "./pages/MomentumLeadManager.jsx";
 
 // Auth'd pages
 import Leads from "./pages/Leads.jsx";
@@ -35,6 +36,10 @@ export default function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route
+            path="/momentum-lead-manager"
+            element={<MomentumLeadManager />}
+          />
 
           {/* Debug */}
           <Route path="/me" element={<Me />} />
