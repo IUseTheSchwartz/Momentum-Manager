@@ -21,13 +21,27 @@ export default function Landing() {
           </button>
 
           {menuOpen && (
-            <div className="absolute right-0 mt-2 w-56 rounded-xl bg-slate-900/95 border border-white/10 shadow-lg backdrop-blur-sm z-20">
+            <div
+              className="
+                absolute right-0 mt-2 w-56 rounded-2xl
+                bg-slate-950/95 border border-white/10
+                shadow-lg backdrop-blur-md
+                text-sm text-white z-20
+              "
+            >
               <Link
                 to="/momentum-lead-manager"
-                className="block px-4 py-2 text-sm hover:bg-white/5"
+                className="block px-4 py-2 hover:bg-white/5"
                 onClick={() => setMenuOpen(false)}
               >
                 Momentum Lead Manager
+              </Link>
+              <Link
+                to="/get-my-landing-page"
+                className="block px-4 py-2 hover:bg-white/5"
+                onClick={() => setMenuOpen(false)}
+              >
+                Get My Landing Page
               </Link>
             </div>
           )}
