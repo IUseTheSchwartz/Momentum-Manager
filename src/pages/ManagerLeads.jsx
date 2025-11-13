@@ -1,3 +1,4 @@
+// File: src/pages/ManagerLeads.jsx
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { fmtMDY } from "../lib/dateFmt";
@@ -28,7 +29,10 @@ export default function ManagerLeads() {
         )
         .order("created_at", { ascending: false })
         .limit(5000),
-      supabase.from("user_profiles").select("id, full_name, email").order("full_name", { ascending: true }),
+      supabase
+        .from("user_profiles")
+        .select("id, full_name, email")
+        .order("full_name", { ascending: true }),
     ]);
     setRows(leads || []);
     setUsers(agents || []);
@@ -53,7 +57,10 @@ export default function ManagerLeads() {
       if (onlyUnassigned && r.assigned_to) return false;
 
       if (!q) return true;
-      const name = [r.first_name, r.last_name].filter(Boolean).join(" ").toLowerCase();
+      const name = [r.first_name, r.last_name]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
       return (
         name.includes(q) ||
         (r.phone_e164 || "").toLowerCase().includes(q) ||
@@ -99,8 +106,31 @@ export default function ManagerLeads() {
       setStatusMsg(j.error || "Failed to unassign");
       return;
     }
-    setStatusMsg(`Unassigned ${j.unassigned} lead${j.unassigned === 1 ? "" : "s"}`);
+    setStatusMsg(
+      `Unassigned ${j.unassigned} lead${j.unassigned === 1 ? "" : "s"}`
+    );
     load();
+  }
+
+  // NEW: delete lead
+  async function deleteLead(leadId) {
+    const ok = window.confirm(
+      "Are you sure you want to permanently delete this lead?"
+    );
+    if (!ok) return;
+
+    setStatusMsg("Deleting…");
+    const { error } = await supabase.from("leads").delete().eq("id", leadId);
+
+    if (error) {
+      console.error("[ManagerLeads] delete error:", error);
+      setStatusMsg("Failed to delete lead");
+      return;
+    }
+
+    // Optimistically update local state so it feels instant
+    setRows((prev) => prev.filter((l) => l.id !== leadId));
+    setStatusMsg("Lead deleted");
   }
 
   return (
@@ -170,7 +200,11 @@ export default function ManagerLeads() {
         />
 
         <div className="col-span-full flex gap-3">
-          <button className="btn btn-primary" onClick={quickAssign} disabled={!assignTo || !count}>
+          <button
+            className="btn btn-primary"
+            onClick={quickAssign}
+            disabled={!assignTo || !count}
+          >
             Quick Assign
           </button>
           <div className="text-sm text-white/60 self-center">{statusMsg}</div>
@@ -199,28 +233,45 @@ export default function ManagerLeads() {
           <tbody>
             {filtered.map((l) => (
               <tr key={l.id} className="border-t border-white/10">
-                <td className="p-2">{[l.first_name, l.last_name].filter(Boolean).join(" ") || "—"}</td>
+                <td className="p-2">
+                  {[l.first_name, l.last_name].filter(Boolean).join(" ") || "—"}
+                </td>
                 <td className="p-2">{l.phone_e164 || "—"}</td>
                 <td className="p-2">{l.email || "—"}</td>
                 <td className="p-2">{l.state || "—"}</td>
                 <td className="p-2">{l.lead_type || "—"}</td>
                 <td className="p-2">{l.military_branch || "—"}</td>
                 <td className="p-2">{fmtMDY(l.dob)}</td>
-                <td className="p-2">{(l.age ?? "") !== "" ? l.age : "—"}</td>
+                <td className="p-2">
+                  {(l.age ?? "") !== "" ? l.age : "—"}
+                </td>
                 <td className="p-2">{l.beneficiary_name || "—"}</td>
-                <td className="p-2 capitalize">{l.status.replaceAll("_", " ")}</td>
+                <td className="p-2 capitalize">
+                  {l.status.replaceAll("_", " ")}
+                </td>
                 <td className="p-2">
                   {users.find((u) => u.id === l.assigned_to)?.full_name ||
                     (l.assigned_to ? "—" : "Unassigned")}
                 </td>
                 <td className="p-2">
-                  {l.assigned_to ? (
-                    <button className="btn text-xs" onClick={() => unassignOne(l.id)}>
-                      Unassign
+                  <div className="flex gap-2">
+                    {l.assigned_to ? (
+                      <button
+                        className="btn text-xs"
+                        onClick={() => unassignOne(l.id)}
+                      >
+                        Unassign
+                      </button>
+                    ) : (
+                      <span className="text-white/40 text-xs">—</span>
+                    )}
+                    <button
+                      className="btn text-xs bg-red-600/80 hover:bg-red-600"
+                      onClick={() => deleteLead(l.id)}
+                    >
+                      Delete
                     </button>
-                  ) : (
-                    <span className="text-white/40 text-xs">—</span>
-                  )}
+                  </div>
                 </td>
               </tr>
             ))}
