@@ -5,11 +5,11 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import Landing from "./pages/Landing.jsx";
 import Login from "./pages/Login.jsx";
 import Signup from "./pages/Signup.jsx";
+import MomentumLeadManager from "./pages/MomentumLeadManager.jsx";
 
 // Auth'd pages
 import Leads from "./pages/Leads.jsx";
 import GetMyLandingPage from "./pages/GetMyLandingPage.jsx";
-import MomentumLeadManager from "./pages/MomentumLeadManager.jsx";
 
 // Manager pages (gated)
 import ManagerDashboard from "./pages/ManagerDashboard.jsx";
@@ -36,6 +36,10 @@ export default function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route
+            path="/momentum-lead-manager"
+            element={<MomentumLeadManager />}
+          />
 
           {/* Debug */}
           <Route path="/me" element={<Me />} />
@@ -46,10 +50,6 @@ export default function App() {
             <Route
               path="/get-my-landing-page"
               element={<GetMyLandingPage />}
-            />
-            <Route
-              path="/momentum-lead-manager"
-              element={<MomentumLeadManager />}
             />
 
             {/* Manager-only */}
