@@ -6,10 +6,10 @@ import Landing from "./pages/Landing.jsx";
 import Login from "./pages/Login.jsx";
 import Signup from "./pages/Signup.jsx";
 import MomentumLeadManager from "./pages/MomentumLeadManager.jsx";
+import GetMyLandingPage from "./pages/GetMyLandingPage.jsx";
 
 // Auth'd pages
 import Leads from "./pages/Leads.jsx";
-import GetMyLandingPage from "./pages/GetMyLandingPage.jsx";
 
 // Manager pages (gated)
 import ManagerDashboard from "./pages/ManagerDashboard.jsx";
@@ -18,7 +18,7 @@ import ManagerLeads from "./pages/ManagerLeads.jsx";
 import ManagerInvites from "./pages/ManagerInvites.jsx";
 import ManagerMembers from "./pages/ManagerMembers.jsx";
 
-// Debug page (optional, helps verify role)
+// Debug page
 import Me from "./pages/Me.jsx";
 
 // Shell
@@ -40,6 +40,10 @@ export default function App() {
             path="/momentum-lead-manager"
             element={<MomentumLeadManager />}
           />
+          <Route
+            path="/get-my-landing-page"
+            element={<GetMyLandingPage />}
+          />
 
           {/* Debug */}
           <Route path="/me" element={<Me />} />
@@ -47,10 +51,6 @@ export default function App() {
           {/* Auth required */}
           <Route element={<ProtectedRoute />}>
             <Route path="/leads" element={<Leads />} />
-            <Route
-              path="/get-my-landing-page"
-              element={<GetMyLandingPage />}
-            />
 
             {/* Manager-only */}
             <Route element={<RoleGate role="manager" />}>
