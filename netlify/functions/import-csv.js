@@ -273,6 +273,10 @@ export const handler = async (event) => {
       const dobISO = toDateISO(m.dob);
       const numericAge = safeAge(m.age, dobISO);
 
+      // NEW: final lead type = CSV column OR selected default, uppercased
+      const finalLeadTypeRaw = (m.lead_type || default_lead_type || "").toString().trim();
+      const finalLeadType = finalLeadTypeRaw ? finalLeadTypeRaw.toUpperCase() : null;
+
       staged.push({
         source_file_id: fileId,
         first_name: m.first_name || null,
@@ -284,7 +288,8 @@ export const handler = async (event) => {
         age: Number.isFinite(numericAge) ? numericAge : null,
         military_branch: m.military_branch || null, // branch only, status ignored
         beneficiary_name: m.beneficiary_name || null,
-        // lead_type, city, zip, notes intentionally omitted — you handle those elsewhere
+        lead_type: finalLeadType, // 👈 back again, using default when CSV doesn't have it
+        // city, zip, notes intentionally omitted — you handle those elsewhere
         status: "new",
       });
     }
