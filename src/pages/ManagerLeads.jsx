@@ -112,13 +112,8 @@ export default function ManagerLeads() {
     load();
   }
 
-  // Delete lead
+  // Delete lead (no confirm)
   async function deleteLead(leadId) {
-    const ok = window.confirm(
-      "Are you sure you want to permanently delete this lead?"
-    );
-    if (!ok) return;
-
     setStatusMsg("Deleting…");
     const { error } = await supabase.from("leads").delete().eq("id", leadId);
 
