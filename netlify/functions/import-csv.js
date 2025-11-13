@@ -1,31 +1,74 @@
+// File: netlify/functions/import-csv.js
 import { createClient } from "@supabase/supabase-js";
 
 /* ---------- tiny CSV parser (no deps) ---------- */
 function parseCSV(text) {
   const rows = [];
   let row = [], field = "", i = 0, q = false;
+
   while (i < text.length) {
     const c = text[i];
+
     if (q) {
       if (c === '"') {
-        if (text[i + 1] === '"') { field += '"'; i += 2; continue; }
-        q = false; i++; continue;
+        if (text[i + 1] === '"') {
+          field += '"';
+          i += 2;
+          continue;
+        }
+        q = false;
+        i++;
+        continue;
       }
-      field += c; i++; continue;
+      field += c;
+      i++;
+      continue;
     } else {
-      if (c === '"') { q = true; i++; continue; }
-      if (c === ',') { row.push(field); field = ""; i++; continue; }
-      if (c === '\r') { i++; continue; }
-      if (c === '\n') { row.push(field); rows.push(row); row = []; field = ""; i++; continue; }
-      field += c; i++; continue;
+      if (c === '"') {
+        q = true;
+        i++;
+        continue;
+      }
+      if (c === ",") {
+        row.push(field);
+        field = "";
+        i++;
+        continue;
+      }
+      if (c === "\r") {
+        i++;
+        continue;
+      }
+      if (c === "\n") {
+        row.push(field);
+        rows.push(row);
+        row = [];
+        field = "";
+        i++;
+        continue;
+      }
+      field += c;
+      i++;
+      continue;
     }
   }
-  row.push(field); rows.push(row);
-  while (rows.length && rows[rows.length - 1].every(v => v === "")) rows.pop();
-  const headers = (rows.shift() || []).map(h => (h || "").trim());
+
+  row.push(field);
+  rows.push(row);
+
+  while (rows.length && rows[rows.length - 1].every((v) => v === "")) rows.pop();
+
+  const headers = (rows.shift() || []).map((h) => (h || "").trim());
   return { headers, rows };
 }
-function json(status, obj) { return { statusCode: status, headers: { "Content-Type": "application/json" }, body: JSON.stringify(obj) }; }
+
+function json(status, obj) {
+  return {
+    statusCode: status,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(obj),
+  };
+}
 
 function toE164(usPhone) {
   const digits = String(usPhone || "").replace(/\D+/g, "");
@@ -37,49 +80,108 @@ function toE164(usPhone) {
 
 /* ---------- header mapping (NO "Military Status") ---------- */
 const MAP = {
-  first_name: ["first_name","First Name","first","fname","First"],
-  last_name:  ["last_name","Last Name","last","lname","Last"],
+  first_name: ["first_name", "First Name", "first", "fname", "First"],
+  last_name: ["last_name", "Last Name", "last", "lname", "Last"],
   phone: [
-    "phone","Phone","phone_number","Phone Number","mobile","Mobile","Phone #",
-    "Primary Phone","Cell","Cell Phone","Telephone","Best Phone","Phone1","Phone 1"
+    "phone",
+    "Phone",
+    "phone_number",
+    "Phone Number",
+    "mobile",
+    "Mobile",
+    "Phone #",
+    "Primary Phone",
+    "Cell",
+    "Cell Phone",
+    "Telephone",
+    "Best Phone",
+    "Phone1",
+    "Phone 1",
   ],
-  email:      ["email","Email","e-mail","Email Address"],
-  state:      ["state","State","RR State"],
-  city:       ["city","City"],
-  zip:        ["zip","Zip","zipcode","Zip Code","postal","Postal Code"],
-  age:        ["age","Age"],
-  dob:        ["dob","DOB","Date of Birth","Birthdate","Birth Date"],
-  military_branch: ["Military Branch","Military","Branch","Service Branch"], // branch only
-  beneficiary_name: ["beneficiary","Beneficiary","beneficiary_name","Beneficiary Name"],
-  lead_type: ["lead_type","Lead Type","Type","Product"],
-  notes:      ["notes","Notes"]
+  email: ["email", "Email", "e-mail", "Email Address"],
+  state: ["state", "State", "RR State"],
+  city: ["city", "City"],
+  zip: ["zip", "Zip", "zipcode", "Zip Code", "postal", "Postal Code"],
+  age: ["age", "Age"],
+  dob: ["dob", "DOB", "Date of Birth", "Birthdate", "Birth Date"],
+  military_branch: ["Military Branch", "Military", "Branch", "Service Branch"], // branch only
+  beneficiary_name: ["beneficiary", "Beneficiary", "beneficiary_name", "Beneficiary Name"],
+  lead_type: ["lead_type", "Lead Type", "Type", "Product"],
+  notes: ["notes", "Notes"],
 };
 
 function aliasToCanon(h) {
   const key = String(h || "").trim().toLowerCase();
   for (const [canon, aliases] of Object.entries(MAP)) {
-    if (aliases.map(a => a.toLowerCase()).includes(key)) return canon;
+    if (aliases.map((a) => a.toLowerCase()).includes(key)) return canon;
   }
   return null;
 }
 
-function* chunked(arr, size) { for (let i=0;i<arr.length;i+=size) yield arr.slice(i,i+size); }
+function* chunked(arr, size) {
+  for (let i = 0; i < arr.length; i += size) yield arr.slice(i, i + size);
+}
 
+/* ---------- safer DOB + age helpers ---------- */
+
+/**
+ * Accept only DD-MM-YYYY or DD/MM/YYYY (day first).
+ * If it doesn't match that pattern, return null.
+ */
 function toDateISO(s) {
   if (!s) return null;
   const t = String(s).trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;            // YYYY-MM-DD
-  const mdy = t.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/); // MM/DD/YYYY
-  if (mdy) { const [_, m, d, y] = mdy; return `${String(y)}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`; }
-  const d = new Date(t); if (isNaN(d)) return null; return d.toISOString().slice(0,10);
+  const m = t.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/); // DD-MM-YYYY or DD/MM/YYYY
+
+  if (!m) return null;
+
+  const [, ddStr, mmStr, yyyyStr] = m;
+  const d = parseInt(ddStr, 10);
+  const mnum = parseInt(mmStr, 10);
+  const y = parseInt(yyyyStr, 10);
+
+  // basic sanity checks
+  if (!Number.isFinite(d) || !Number.isFinite(mnum) || !Number.isFinite(y)) return null;
+  if (y < 1900 || y > 2100) return null;
+  if (mnum < 1 || mnum > 12) return null;
+  if (d < 1 || d > 31) return null;
+
+  // store as YYYY-MM-DD
+  const mmP = String(mnum).padStart(2, "0");
+  const ddP = String(d).padStart(2, "0");
+  return `${y}-${mmP}-${ddP}`;
 }
 
 function ageFromDOB(iso) {
   if (!iso) return null;
-  const d = new Date(iso); if (isNaN(d)) return null;
-  const n = new Date(); let a = n.getFullYear() - d.getFullYear();
-  const m = n.getMonth() - d.getMonth(); if (m < 0 || (m === 0 && n.getDate() < d.getDate())) a--;
-  return (a >= 0 && a < 130) ? a : null;
+  const d = new Date(iso);
+  if (isNaN(d)) return null;
+
+  const n = new Date();
+  let a = n.getFullYear() - d.getFullYear();
+  const m = n.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && n.getDate() < d.getDate())) a--;
+
+  return a;
+}
+
+/**
+ * Safely get an age:
+ * - Prefer explicit Age column if it's 0–120
+ * - Else compute from DOB if available
+ * - Else null
+ */
+function safeAge(maybeAge, dobISO) {
+  if (maybeAge != null && maybeAge !== "") {
+    const cleaned = String(maybeAge).replace(/[^\d]/g, "");
+    const n = Number(cleaned);
+    if (Number.isFinite(n) && n >= 0 && n <= 120) return n;
+  }
+
+  const fromDob = ageFromDOB(dobISO);
+  if (Number.isFinite(fromDob) && fromDob >= 0 && fromDob <= 120) return fromDob;
+
+  return null;
 }
 
 /* Fallback: find a plausible US number anywhere in the row */
@@ -106,7 +208,12 @@ export const handler = async (event) => {
     const supa = createClient(VITE_SUPABASE_URL, SUPABASE_SERVICE_ROLE);
 
     let payload = {};
-    try { payload = JSON.parse(event.body || "{}"); } catch { return json(400, { error: "Invalid JSON body" }); }
+    try {
+      payload = JSON.parse(event.body || "{}");
+    } catch {
+      return json(400, { error: "Invalid JSON body" });
+    }
+
     const { csv_text, original_filename, user_id, default_lead_type } = payload;
     if (!csv_text) return json(400, { error: "csv_text is required" });
 
@@ -126,11 +233,12 @@ export const handler = async (event) => {
       })
       .select("id")
       .single();
-    if (fileInsert.error) return json(500, { error: `lead_files insert: ${fileInsert.error.message}` });
+    if (fileInsert.error)
+      return json(500, { error: `lead_files insert: ${fileInsert.error.message}` });
     const fileId = fileInsert.data.id;
 
     // header map
-    const headerMap = headers.map(h => aliasToCanon(h));
+    const headerMap = headers.map((h) => aliasToCanon(h));
 
     // stage
     const staged = [];
@@ -138,17 +246,18 @@ export const handler = async (event) => {
 
     for (const r of rows) {
       const m = {};
-      for (let i=0; i<headers.length; i++) {
+
+      for (let i = 0; i < headers.length; i++) {
         const canon = headerMap[i];
         const val = r[i] ?? "";
         const trimmed = String(val ?? "").trim();
         if (!trimmed) continue; // keep blanks blank
 
         if (canon) {
+          // combine duplicates into one field (e.g., multiple "Notes" columns)
           m[canon] = (m[canon] ?? "").toString() + (m[canon] ? " " : "") + trimmed;
-        } else {
-          m.notes = `${m.notes ? m.notes + " | " : ""}${headers[i]}: ${trimmed}`;
         }
+        // else: ignore unknown columns (no notes building)
       }
 
       // phone: header match first, else fallback
@@ -156,10 +265,13 @@ export const handler = async (event) => {
       if (!phone_e164) phone_e164 = fallbackPhoneFromRow(r);
 
       const email = (m.email || "").toLowerCase().trim();
-      if (!phone_e164 && !email) { skipped_missing_contact++; continue; }
+      if (!phone_e164 && !email) {
+        skipped_missing_contact++;
+        continue;
+      }
 
       const dobISO = toDateISO(m.dob);
-      const numericAge = m.age ? Number(m.age) : ageFromDOB(dobISO);
+      const numericAge = safeAge(m.age, dobISO);
 
       staged.push({
         source_file_id: fileId,
@@ -168,14 +280,11 @@ export const handler = async (event) => {
         phone_e164,
         email: email || null,
         state: m.state || null,
-        city: m.city || null,
-        zip: m.zip || null,
         dob: dobISO || null,
         age: Number.isFinite(numericAge) ? numericAge : null,
         military_branch: m.military_branch || null, // branch only, status ignored
         beneficiary_name: m.beneficiary_name || null,
-        lead_type: (m.lead_type || default_lead_type || null),
-        notes: m.notes || null,
+        // lead_type, city, zip, notes intentionally omitted — you handle those elsewhere
         status: "new",
       });
     }
@@ -187,13 +296,19 @@ export const handler = async (event) => {
 
     for (const rec of staged) {
       const key = rec.phone_e164 || null;
-      if (!key) { uniqueByFile.push(rec); continue; } // allow email-only
-      if (seenFilePhones.has(key)) { skipped_file_dupes++; continue; }
+      if (!key) {
+        uniqueByFile.push(rec);
+        continue; // allow email-only
+      }
+      if (seenFilePhones.has(key)) {
+        skipped_file_dupes++;
+        continue;
+      }
       seenFilePhones.add(key);
       uniqueByFile.push(rec);
     }
 
-    const phones = [...new Set(uniqueByFile.map(r => r.phone_e164).filter(Boolean))];
+    const phones = [...new Set(uniqueByFile.map((r) => r.phone_e164).filter(Boolean))];
     const existingPhones = new Set();
     for (const batch of chunked(phones, 1000)) {
       const { data, error } = await supa
@@ -201,28 +316,37 @@ export const handler = async (event) => {
         .select("phone_e164")
         .in("phone_e164", batch);
       if (error) return json(500, { error: `lookup existing phones: ${error.message}` });
-      for (const row of data || []) existingPhones.add(row.phone_e164);
+      for (const row of (data || [])) existingPhones.add(row.phone_e164);
     }
 
-    const ready = uniqueByFile.filter(r => !r.phone_e164 || !existingPhones.has(r.phone_e164));
+    const ready = uniqueByFile.filter(
+      (r) => !r.phone_e164 || !existingPhones.has(r.phone_e164)
+    );
     const skipped_existing_dupes = uniqueByFile.length - ready.length;
 
     // insert
     let inserted = 0;
     for (const chunk of chunked(ready, 500)) {
       const ins = await supa.from("leads").insert(chunk).select("id");
-      if (ins.error) return json(500, { error: `Insert error: ${ins.error.message}` });
+      if (ins.error) {
+        return json(500, { error: `Insert error: ${ins.error.message}` });
+      }
       inserted += ins.data?.length || 0;
     }
 
     // finalize
-    const totalSkipped = skipped_missing_contact + skipped_file_dupes + skipped_existing_dupes;
-    const upd = await supa.from("lead_files").update({
-      processed_count: inserted,
-      skipped_count: totalSkipped,
-      status: "processed",
-    }).eq("id", fileId);
-    if (upd.error) return json(500, { error: `lead_files update: ${upd.error.message}` });
+    const totalSkipped =
+      skipped_missing_contact + skipped_file_dupes + skipped_existing_dupes;
+    const upd = await supa
+      .from("lead_files")
+      .update({
+        processed_count: inserted,
+        skipped_count: totalSkipped,
+        status: "processed",
+      })
+      .eq("id", fileId);
+    if (upd.error)
+      return json(500, { error: `lead_files update: ${upd.error.message}` });
 
     return json(200, {
       ok: true,
@@ -232,8 +356,8 @@ export const handler = async (event) => {
       breakdown: {
         missing_contact: skipped_missing_contact,
         file_duplicates_by_phone: skipped_file_dupes,
-        existing_duplicates_by_phone: skipped_existing_dupes
-      }
+        existing_duplicates_by_phone: skipped_existing_dupes,
+      },
     });
   } catch (e) {
     console.error("import-csv fatal:", e);
