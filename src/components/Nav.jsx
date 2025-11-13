@@ -8,12 +8,13 @@ export default function Nav() {
   const [authed, setAuthed] = useState(false);
   const loc = useLocation();
 
-  // Hide nav links on landing, auth pages, and the public lead manager page
+  // Hide nav links on landing, auth pages, public lead manager, and get-my-landing-page
   const HIDE_LINKS_PATHS = new Set([
     "/",
     "/login",
     "/signup",
     "/momentum-lead-manager",
+    "/get-my-landing-page",
   ]);
   const hideLinks = HIDE_LINKS_PATHS.has(loc.pathname);
 
@@ -43,7 +44,7 @@ export default function Nav() {
 
       if (error) {
         console.warn("[Nav] user_profiles read error:", error);
-        setRole(null); // never show manager on error
+        setRole(null);
         return;
       }
 
@@ -54,7 +55,6 @@ export default function Nav() {
 
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       setAuthed(!!session);
-      // Re-load role when auth changes (login, logout, token refresh)
       load();
     });
 
@@ -81,18 +81,15 @@ export default function Nav() {
                 <Link to="/manager">Manager</Link>
                 <Link to="/manager/imports">Imports</Link>
                 <Link to="/manager/leads">All Leads</Link>
-                {/* add these if you have the routes: */}
-                {/* <Link to="/manager/invites">Invites</Link>
-                <Link to="/manager/members">Members</Link> */}
               </>
             )}
 
-            {!authed ? (
+            {!authed && (
               <>
                 <Link to="/login">Login</Link>
                 <Link to="/signup">Sign up</Link>
               </>
-            ) : null}
+            )}
           </nav>
         )}
       </div>
