@@ -69,19 +69,19 @@ export default function Landing() {
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
               <h3 className="text-sm font-semibold mb-1">What to expect</h3>
               <p className="text-xs text-white/70">
-                Daily dials, live Zooms, and clear non-negotiables. If you&apos;re
+                Daily dials, live calls, and clear non-negotiables. If you&apos;re
                 coachable and consistent, the system will carry you further than
                 motivation ever will.
               </p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <h3 className="text-sm font-semibold mb-1">How we operate</h3>
-              <p className="text-xs text-white/70">
-                No hype, just standards. Track your numbers, plug into the
-                system, and you&apos;ll always know what to do next to hit your
-                weekly target.
-              </p>
-            </div>
+  <h3 className="text-sm font-semibold mb-1">How we operate</h3>
+  <p className="text-xs text-white/70">
+    No hype, just standards. We show up every day, cameras on, phones dialed,
+    and do the work whether we feel like it or not. If you&apos;re not ready
+    to treat this like your main thing, this isn&apos;t your team.
+  </p>
+</div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
               <h3 className="text-sm font-semibold mb-1">What we provide</h3>
               <p className="text-xs text-white/70">
