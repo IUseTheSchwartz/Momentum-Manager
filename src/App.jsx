@@ -8,6 +8,7 @@ import Signup from "./pages/Signup.jsx";
 
 // Auth'd pages
 import Leads from "./pages/Leads.jsx";
+import GetMyLandingPage from "./pages/GetMyLandingPage.jsx";
 
 // Manager pages (gated)
 import ManagerDashboard from "./pages/ManagerDashboard.jsx";
@@ -41,6 +42,10 @@ export default function App() {
           {/* Auth required */}
           <Route element={<ProtectedRoute />}>
             <Route path="/leads" element={<Leads />} />
+            <Route
+              path="/get-my-landing-page"
+              element={<GetMyLandingPage />}
+            />
 
             {/* Manager-only */}
             <Route element={<RoleGate role="manager" />}>
