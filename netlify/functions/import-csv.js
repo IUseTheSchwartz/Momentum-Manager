@@ -198,6 +198,28 @@ function fallbackPhoneFromRow(cells) {
   return null;
 }
 
+/* ---------- beneficiary helper ---------- */
+
+function pickBeneficiaryName(rawList) {
+  if (!Array.isArray(rawList) || rawList.length === 0) return null;
+
+  const badPattern = /\b(spouse|children|child|son|daughter|wife|husband|kids|other|self|me|my spouse|my children|my kids)\b/i;
+
+  // Prefer entries that do NOT look like relationship labels
+  const cleaned = rawList.map((v) => String(v).trim()).filter(Boolean);
+  if (!cleaned.length) return null;
+
+  const preferred = cleaned.filter((v) => !badPattern.test(v));
+  const pool = preferred.length ? preferred : cleaned;
+
+  // Pick the longest string (usually full name)
+  let best = pool[0];
+  for (const v of pool) {
+    if (v.length > best.length) best = v;
+  }
+  return best || null;
+}
+
 /* ---------- handler ---------- */
 export const handler = async (event) => {
   try {
@@ -255,9 +277,14 @@ export const handler = async (event) => {
         const trimmed = String(val ?? "").trim();
         if (!trimmed) continue; // keep blanks blank
 
-        if (canon) {
+        if (canon === "beneficiary_name") {
+          // SPECIAL: collect all raw beneficiary values
+          if (!m._beneficiary_raw) m._beneficiary_raw = [];
+          m._beneficiary_raw.push(trimmed);
+        } else if (canon) {
           // combine duplicates into one field (e.g., multiple "Notes" columns)
-          m[canon] = (m[canon] ?? "").toString() + (m[canon] ? " " : "") + trimmed;
+          m[canon] =
+            (m[canon] ?? "").toString() + (m[canon] ? " " : "") + trimmed;
         }
         // else: ignore unknown columns (no notes building)
       }
@@ -276,8 +303,13 @@ export const handler = async (event) => {
       const numericAge = safeAge(m.age, dobISO);
 
       // final lead type = CSV column OR selected default, uppercased
-      const finalLeadTypeRaw = (m.lead_type || default_lead_type || "").toString().trim();
+      const finalLeadTypeRaw = (m.lead_type || default_lead_type || "")
+        .toString()
+        .trim();
       const finalLeadType = finalLeadTypeRaw ? finalLeadTypeRaw.toUpperCase() : null;
+
+      // pick a single beneficiary name if we have multiple columns
+      const beneficiary_name = pickBeneficiaryName(m._beneficiary_raw);
 
       staged.push({
         source_file_id: fileId,
@@ -289,7 +321,7 @@ export const handler = async (event) => {
         dob: dobISO || null,
         age: Number.isFinite(numericAge) ? numericAge : null,
         military_branch: m.military_branch || null, // branch only, status ignored
-        beneficiary_name: m.beneficiary_name || null,
+        beneficiary_name: beneficiary_name,
         lead_type: finalLeadType, // uses CSV or default from UI
         // city, zip, notes intentionally omitted — handled elsewhere if needed
         status: "new",
@@ -338,7 +370,7 @@ export const handler = async (event) => {
       if (ins.error) {
         return json(500, { error: `Insert error: ${ins.error.message}` });
       }
-      inserted += ins.data?.length || 0;
+      inserted += (ins.data?.length || 0);
     }
 
     // finalize
