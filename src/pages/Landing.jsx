@@ -5,16 +5,8 @@ import { Link } from "react-router-dom";
 export default function Landing() {
   const [menuOpen, setMenuOpen] = useState(false);
 
-  function scrollToLeadManager() {
-    const el = document.getElementById("lead-manager");
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
-      setMenuOpen(false);
-    }
-  }
-
   return (
-    <div className="min-h-screen bg-gradient-to-b from-black via-slate-950 to-slate-900 text-white">
+    <div className="min-h-screen text-white">
       {/* Top Nav */}
       <header className="flex items-center justify-between px-6 py-4">
         <div className="flex items-center gap-3">
@@ -42,35 +34,13 @@ export default function Landing() {
           </button>
 
           {menuOpen && (
-            <div className="absolute right-0 mt-2 w-48 rounded-xl bg-slate-900/95 border border-white/10 shadow-lg backdrop-blur-sm z-20">
-              <button
-                type="button"
-                onClick={scrollToLeadManager}
-                className="w-full text-left px-4 py-2 text-sm hover:bg-white/5"
-              >
-                Lead Manager
-              </button>
+            <div className="absolute right-0 mt-2 w-56 rounded-xl bg-slate-900/95 border border-white/10 shadow-lg backdrop-blur-sm z-20">
               <Link
-                to="/get-my-landing-page"
+                to="/momentum-lead-manager"
                 className="block px-4 py-2 text-sm hover:bg-white/5"
                 onClick={() => setMenuOpen(false)}
               >
-                Get My Landing Page
-              </Link>
-              <div className="border-t border-white/10 my-1" />
-              <Link
-                to="/login"
-                className="block px-4 py-2 text-sm hover:bg-white/5"
-                onClick={() => setMenuOpen(false)}
-              >
-                Login
-              </Link>
-              <Link
-                to="/signup"
-                className="block px-4 py-2 text-sm hover:bg-white/5"
-                onClick={() => setMenuOpen(false)}
-              >
-                Sign up with code
+                Momentum Lead Manager
               </Link>
             </div>
           )}
@@ -134,30 +104,6 @@ export default function Landing() {
             If you&apos;re looking for a framework to outwork everyone else, you&apos;re in
             the right place.
           </p>
-        </section>
-
-        {/* Lead Manager Section – your old landing, preserved */}
-        <section
-          id="lead-manager"
-          className="mt-20 max-w-xl mx-auto text-center border-t border-white/10 pt-10"
-        >
-          <img
-            src="/logo.png"
-            alt="MF"
-            className="mx-auto h-24 w-24 mb-6"
-          />
-          <h2 className="text-3xl font-bold mb-2">Momentum Manager</h2>
-          <p className="text-white/70 mb-6">
-            Lead distribution for the Momentum Financial Discord.
-          </p>
-          <div className="flex gap-3 justify-center">
-            <Link className="btn btn-primary" to="/login">
-              Login
-            </Link>
-            <Link className="btn" to="/signup">
-              Sign up with code
-            </Link>
-          </div>
         </section>
       </main>
     </div>
