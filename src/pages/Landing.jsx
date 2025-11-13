@@ -7,14 +7,8 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen text-white">
-      {/* Top Nav */}
-      <header className="flex items-center justify-between px-6 py-4">
-        <div className="flex items-center gap-3">
-          {/* Logo only (text + tagline removed) */}
-          <img src="/logo.png" alt="MF" className="h-10 w-10" />
-        </div>
-
-        {/* Hamburger */}
+      {/* Page-level header: only hamburger on the right */}
+      <header className="flex items-center justify-end px-6 py-4">
         <div className="relative">
           <button
             type="button"
@@ -83,10 +77,10 @@ export default function Landing() {
             </div>
           </div>
 
-          {/* Single Join Team button -> external Logan landing page */}
+          {/* Single Join Team button -> Logan's landing page */}
           <div className="mt-8 flex justify-center">
             <a
-              href="https://ltharris.com"
+              href="https://logantharris.com"
               target="_blank"
               rel="noreferrer"
               className="btn btn-primary"
