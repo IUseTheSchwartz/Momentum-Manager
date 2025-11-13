@@ -56,6 +56,7 @@ function parseCSV(text) {
   row.push(field);
   rows.push(row);
 
+  // drop trailing empty rows
   while (rows.length && rows[rows.length - 1].every((v) => v === "")) rows.pop();
 
   const headers = (rows.shift() || []).map((h) => (h || "").trim());
@@ -125,30 +126,31 @@ function* chunked(arr, size) {
 /* ---------- safer DOB + age helpers ---------- */
 
 /**
- * Accept only DD-MM-YYYY or DD/MM/YYYY (day first).
- * If it doesn't match that pattern, return null.
+ * Accept US-style dates: MM/DD/YYYY or MM-DD-YYYY.
+ * If it doesn't match that pattern or the year is insane, return null.
  */
 function toDateISO(s) {
   if (!s) return null;
   const t = String(s).trim();
-  const m = t.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/); // DD-MM-YYYY or DD/MM/YYYY
 
+  // MM/DD/YYYY or MM-DD-YYYY
+  const m = t.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
   if (!m) return null;
 
-  const [, ddStr, mmStr, yyyyStr] = m;
-  const d = parseInt(ddStr, 10);
-  const mnum = parseInt(mmStr, 10);
+  const [, mmStr, ddStr, yyyyStr] = m;
+  const mm = parseInt(mmStr, 10);
+  const dd = parseInt(ddStr, 10);
   const y = parseInt(yyyyStr, 10);
 
-  // basic sanity checks
-  if (!Number.isFinite(d) || !Number.isFinite(mnum) || !Number.isFinite(y)) return null;
-  if (y < 1900 || y > 2100) return null;
-  if (mnum < 1 || mnum > 12) return null;
-  if (d < 1 || d > 31) return null;
+  // sanity checks
+  if (!Number.isFinite(mm) || !Number.isFinite(dd) || !Number.isFinite(y)) return null;
+  if (y < 1900 || y > 2100) return null; // kills 10830, 21481, etc.
+  if (mm < 1 || mm > 12) return null;
+  if (dd < 1 || dd > 31) return null;
 
   // store as YYYY-MM-DD
-  const mmP = String(mnum).padStart(2, "0");
-  const ddP = String(d).padStart(2, "0");
+  const mmP = String(mm).padStart(2, "0");
+  const ddP = String(dd).padStart(2, "0");
   return `${y}-${mmP}-${ddP}`;
 }
 
@@ -273,7 +275,7 @@ export const handler = async (event) => {
       const dobISO = toDateISO(m.dob);
       const numericAge = safeAge(m.age, dobISO);
 
-      // NEW: final lead type = CSV column OR selected default, uppercased
+      // final lead type = CSV column OR selected default, uppercased
       const finalLeadTypeRaw = (m.lead_type || default_lead_type || "").toString().trim();
       const finalLeadType = finalLeadTypeRaw ? finalLeadTypeRaw.toUpperCase() : null;
 
@@ -288,8 +290,8 @@ export const handler = async (event) => {
         age: Number.isFinite(numericAge) ? numericAge : null,
         military_branch: m.military_branch || null, // branch only, status ignored
         beneficiary_name: m.beneficiary_name || null,
-        lead_type: finalLeadType, // 👈 back again, using default when CSV doesn't have it
-        // city, zip, notes intentionally omitted — you handle those elsewhere
+        lead_type: finalLeadType, // uses CSV or default from UI
+        // city, zip, notes intentionally omitted — handled elsewhere if needed
         status: "new",
       });
     }
@@ -321,7 +323,7 @@ export const handler = async (event) => {
         .select("phone_e164")
         .in("phone_e164", batch);
       if (error) return json(500, { error: `lookup existing phones: ${error.message}` });
-      for (const row of (data || [])) existingPhones.add(row.phone_e164);
+      for (const row of data || []) existingPhones.add(row.phone_e164);
     }
 
     const ready = uniqueByFile.filter(
