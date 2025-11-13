@@ -24,7 +24,9 @@ export default function Signup() {
     try {
       setBusy(true);
       await signUp({ email, password: pass, full_name: name, code: trimmed });
-      nav("/leads");
+
+      // 👇 Change: send them back to the landing hub instead of /leads
+      nav("/");
     } catch (e) {
       setErr(e.message || "Sign up failed.");
     } finally {
@@ -35,7 +37,9 @@ export default function Signup() {
   return (
     <div className="max-w-md mx-auto mt-16 card p-6">
       <h2 className="text-xl font-semibold mb-4">Sign up</h2>
-      <p className="text-sm text-white/60 mb-2">You must have a valid invite code.</p>
+      <p className="text-sm text-white/60 mb-2">
+        You must have a valid invite code.
+      </p>
       {err && <p className="text-red-400 text-sm mb-2">{err}</p>}
       <form onSubmit={submit} className="space-y-3">
         <input
@@ -69,7 +73,10 @@ export default function Signup() {
           onChange={(e) => setCode(e.target.value)}
           required
         />
-        <button className="btn btn-primary w-full" disabled={busy || !code.trim()}>
+        <button
+          className="btn btn-primary w-full"
+          disabled={busy || !code.trim()}
+        >
           {busy ? "Creating..." : "Create account"}
         </button>
       </form>
