@@ -1,4 +1,3 @@
-// File: src/components/Nav.jsx
 import { Link, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
@@ -81,13 +80,15 @@ export default function Nav() {
                 <Link to="/manager">Manager</Link>
                 <Link to="/manager/imports">Imports</Link>
                 <Link to="/manager/leads">All Leads</Link>
+                <Link to="/manager/invites">Invites</Link>
+                <Link to="/manager/members">Members</Link>
               </>
             )}
 
             {!authed && (
               <>
                 <Link to="/login">Login</Link>
-                <Link to="/signup">Sign up</Link>
+                <Link to="/signup">Sign up with code</Link>
               </>
             )}
           </nav>
