@@ -7,7 +7,14 @@ export default function Nav() {
   const [role, setRole] = useState(null);
   const [authed, setAuthed] = useState(false);
   const loc = useLocation();
-  const HIDE_LINKS_PATHS = new Set(["/", "/login", "/signup"]);
+
+  // Hide nav links on landing, auth pages, and the public lead manager page
+  const HIDE_LINKS_PATHS = new Set([
+    "/",
+    "/login",
+    "/signup",
+    "/momentum-lead-manager",
+  ]);
   const hideLinks = HIDE_LINKS_PATHS.has(loc.pathname);
 
   useEffect(() => {
