@@ -112,7 +112,7 @@ export default function ManagerLeads() {
     load();
   }
 
-  // NEW: delete lead
+  // Delete lead
   async function deleteLead(leadId) {
     const ok = window.confirm(
       "Are you sure you want to permanently delete this lead?"
@@ -128,7 +128,6 @@ export default function ManagerLeads() {
       return;
     }
 
-    // Optimistically update local state so it feels instant
     setRows((prev) => prev.filter((l) => l.id !== leadId));
     setStatusMsg("Lead deleted");
   }
@@ -207,66 +206,71 @@ export default function ManagerLeads() {
           >
             Quick Assign
           </button>
-          <div className="text-sm text-white/60 self-center">{statusMsg}</div>
+          <div className="text-sm text-white/60 self-center">
+            {statusMsg}
+          </div>
         </div>
       </div>
 
       {/* Table */}
-      <div className="card p-4 overflow-x-auto">
-        <table className="w-full text-sm">
+      <div className="card p-4">
+        <table className="w-full text-xs">
           <thead className="text-white/60">
             <tr>
-              <th className="text-left p-2">Name</th>
-              <th className="text-left p-2">Phone</th>
-              <th className="text-left p-2">Email</th>
-              <th className="text-left p-2">State</th>
-              <th className="text-left p-2">Lead Type</th>
-              <th className="text-left p-2">Military</th>
-              <th className="text-left p-2">DOB</th>
-              <th className="text-left p-2">Age</th>
-              <th className="text-left p-2">Beneficiary</th>
-              <th className="text-left p-2">Status</th>
-              <th className="text-left p-2">Assigned To</th>
-              <th className="text-left p-2">Actions</th>
+              <th className="text-left px-1 py-1">Name</th>
+              <th className="text-left px-1 py-1">Phone</th>
+              <th className="text-left px-1 py-1">Email</th>
+              <th className="text-left px-1 py-1">State</th>
+              <th className="text-left px-1 py-1">Lead Type</th>
+              <th className="text-left px-1 py-1">Military</th>
+              <th className="text-left px-1 py-1">DOB</th>
+              <th className="text-left px-1 py-1">Age</th>
+              <th className="text-left px-1 py-1">Beneficiary</th>
+              <th className="text-left px-1 py-1">Status</th>
+              <th className="text-left px-1 py-1">Assigned To</th>
+              <th className="text-left px-1 py-1">Actions</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((l) => (
               <tr key={l.id} className="border-t border-white/10">
-                <td className="p-2">
-                  {[l.first_name, l.last_name].filter(Boolean).join(" ") || "—"}
+                <td className="px-1 py-1">
+                  {[l.first_name, l.last_name].filter(Boolean).join(" ") ||
+                    "—"}
                 </td>
-                <td className="p-2">{l.phone_e164 || "—"}</td>
-                <td className="p-2">{l.email || "—"}</td>
-                <td className="p-2">{l.state || "—"}</td>
-                <td className="p-2">{l.lead_type || "—"}</td>
-                <td className="p-2">{l.military_branch || "—"}</td>
-                <td className="p-2">{fmtMDY(l.dob)}</td>
-                <td className="p-2">
+                <td className="px-1 py-1">{l.phone_e164 || "—"}</td>
+                <td className="px-1 py-1">{l.email || "—"}</td>
+                <td className="px-1 py-1">{l.state || "—"}</td>
+                <td className="px-1 py-1">{l.lead_type || "—"}</td>
+                <td className="px-1 py-1">{l.military_branch || "—"}</td>
+                <td className="px-1 py-1">{fmtMDY(l.dob)}</td>
+                <td className="px-1 py-1">
                   {(l.age ?? "") !== "" ? l.age : "—"}
                 </td>
-                <td className="p-2">{l.beneficiary_name || "—"}</td>
-                <td className="p-2 capitalize">
+                <td className="px-1 py-1">
+                  {l.beneficiary_name || "—"}
+                </td>
+                <td className="px-1 py-1 capitalize">
                   {l.status.replaceAll("_", " ")}
                 </td>
-                <td className="p-2">
+                <td className="px-1 py-1">
                   {users.find((u) => u.id === l.assigned_to)?.full_name ||
                     (l.assigned_to ? "—" : "Unassigned")}
                 </td>
-                <td className="p-2">
+                <td className="px-1 py-1">
                   <div className="flex gap-2">
                     {l.assigned_to ? (
                       <button
-                        className="btn text-xs"
+                        className="btn text-[10px]"
                         onClick={() => unassignOne(l.id)}
                       >
                         Unassign
                       </button>
                     ) : (
-                      <span className="text-white/40 text-xs">—</span>
+                      <span className="text-white/40 text-[10px]">—</span>
                     )}
                     <button
-                      className="btn text-xs bg-red-600/80 hover:bg-red-600"
+                      className="btn text-[10px] bg-red-600/80 hover:bg-red-600"
                       onClick={() => deleteLead(l.id)}
                     >
                       Delete
