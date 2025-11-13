@@ -10,15 +10,8 @@ export default function Landing() {
       {/* Top Nav */}
       <header className="flex items-center justify-between px-6 py-4">
         <div className="flex items-center gap-3">
+          {/* Logo only (text + tagline removed) */}
           <img src="/logo.png" alt="MF" className="h-10 w-10" />
-          <div className="text-left">
-            <h1 className="text-lg font-semibold tracking-tight">
-              Momentum Financial
-            </h1>
-            <p className="text-xs text-white/50">
-              Built different. No excuses. Just results.
-            </p>
-          </div>
         </div>
 
         {/* Hamburger */}
@@ -90,13 +83,16 @@ export default function Landing() {
             </div>
           </div>
 
-          <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-            <Link className="btn btn-primary" to="/signup">
-              Apply / Sign up with code
-            </Link>
-            <Link className="btn" to="/login">
-              Already on the team? Login
-            </Link>
+          {/* Single Join Team button -> external Logan landing page */}
+          <div className="mt-8 flex justify-center">
+            <a
+              href="https://ltharris.com"
+              target="_blank"
+              rel="noreferrer"
+              className="btn btn-primary"
+            >
+              Join Team
+            </a>
           </div>
 
           <p className="mt-4 text-xs text-white/50">
