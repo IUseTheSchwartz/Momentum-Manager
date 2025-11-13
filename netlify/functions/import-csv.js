@@ -203,12 +203,18 @@ function fallbackPhoneFromRow(cells) {
 function pickBeneficiaryName(rawList) {
   if (!Array.isArray(rawList) || rawList.length === 0) return null;
 
-  const badPattern = /\b(spouse|children|child|son|daughter|wife|husband|kids|other|self|me|my spouse|my children|my kids)\b/i;
-
-  // Prefer entries that do NOT look like relationship labels
   const cleaned = rawList.map((v) => String(v).trim()).filter(Boolean);
   if (!cleaned.length) return null;
 
+  // If there's only one column/value, always use it as-is
+  if (cleaned.length === 1) {
+    return cleaned[0];
+  }
+
+  const badPattern =
+    /\b(spouse|children|child|son|daughter|wife|husband|kids|other|self|me|my spouse|my children|my kids)\b/i;
+
+  // Prefer entries that do NOT look like relationship labels
   const preferred = cleaned.filter((v) => !badPattern.test(v));
   const pool = preferred.length ? preferred : cleaned;
 
@@ -370,7 +376,7 @@ export const handler = async (event) => {
       if (ins.error) {
         return json(500, { error: `Insert error: ${ins.error.message}` });
       }
-      inserted += (ins.data?.length || 0);
+      inserted += ins.data?.length || 0;
     }
 
     // finalize
