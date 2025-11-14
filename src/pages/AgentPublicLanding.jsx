@@ -119,7 +119,7 @@ function CreatorBar({ settings }) {
             </div>
           </div>
 
-          {/* socials — same button style as Logan */}
+          {/* socials */}
           <div className="sm:ml-auto">
             <div className="grid grid-cols-2 gap-2 max-[380px]:grid-cols-1 sm:flex sm:flex-row sm:items-center">
               {items.map(({ key, label, href, Icon }) => (
@@ -143,7 +143,7 @@ function CreatorBar({ settings }) {
   );
 }
 
-/* ---------------------- Main page (Logan-style layout, with proof) ---------------------- */
+/* ---------------------- Main page ---------------------- */
 
 export default function AgentPublicLanding() {
   const { slug } = useParams();
@@ -176,7 +176,7 @@ export default function AgentPublicLanding() {
       setLoading(true);
       setErr(null);
 
-      // 1) site by slug
+      // site by slug
       const { data: siteRow, error: siteErr } = await supabase
         .from("mm_agent_sites")
         .select("*")
@@ -193,7 +193,6 @@ export default function AgentPublicLanding() {
 
       setSite(siteRow);
 
-      // 2) questions (from this project's DB) + proof (from Logan's Netlify function)
       try {
         const [qRes, proofRes] = await Promise.all([
           supabase
@@ -212,11 +211,7 @@ export default function AgentPublicLanding() {
 
         if (proofRes.ok) {
           const json = await proofRes.json();
-          if (Array.isArray(json)) {
-            setProof(json);
-          } else {
-            setProof([]);
-          }
+          setProof(Array.isArray(json) ? json : []);
         } else {
           console.error("logan-proof-feed error status:", proofRes.status);
           setProof([]);
@@ -389,7 +384,7 @@ export default function AgentPublicLanding() {
           )}
           <span className="text-white/60 text-sm">
             {loading ? (
-              <span className="inline-block h-4 w-32 animate-pulse bg-white/10 rounded" />
+              <span className="inline-block h-4 w-32 animate-pulse bg.white/10 rounded" />
             ) : (
               <>
                 {pageOwner} | {siteName}
@@ -487,7 +482,7 @@ export default function AgentPublicLanding() {
             )}
           </div>
 
-          {/* PROOF (from Logan Netlify function) */}
+          {/* PROOF */}
           <div className="mt-6">
             {loading ? (
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
@@ -497,7 +492,7 @@ export default function AgentPublicLanding() {
                   ))}
                 </div>
               </div>
-            ) : (
+            ) : proof.length ? (
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
                 <ProofFeed
                   items={proof}
@@ -507,11 +502,11 @@ export default function AgentPublicLanding() {
                   bigSlides
                 />
               </div>
-            )}
+            ) : null}
           </div>
         </section>
 
-        {/* ABOUT section (Logan-style) */}
+        {/* ABOUT section */}
         <section className="mt-16 grid gap-6 sm:grid-cols-[160px,1fr] items-start">
           {loading ? (
             <>
@@ -649,7 +644,7 @@ export default function AgentPublicLanding() {
                   <button
                     type="button"
                     onClick={closeModal}
-                    className="px-4 py-2 rounded-lg text-xs font-semibold bg-white text-black hover:bg-white/90"
+                    className="px-4 py-2 rounded-lg text-xs font-semibold bg.white text-black hover:bg-white/90"
                   >
                     Close
                   </button>
