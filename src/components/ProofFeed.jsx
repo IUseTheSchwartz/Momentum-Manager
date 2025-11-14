@@ -18,7 +18,6 @@ function formatDate(iso) {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  // Logan style: MM/DD
   return d.toLocaleDateString("en-US", {
     month: "numeric",
     day: "numeric",
@@ -26,79 +25,30 @@ function formatDate(iso) {
 }
 
 /**
- * Discord-style proof carousel (Logan vibe)
- *
- * Props:
- *  - items:        array of proof posts (optional)
- *  - visibleCount: number of cards to show at once
- *  - cycleMs:      auto-advance interval in ms
- *  - blurTransition, bigSlides: cosmetic flags (kept to match Logan API)
- *
- * If `items` is empty or not passed, this component will
- * automatically fetch from `/.netlify/functions/logan-proof-feed`.
+ * Discord-style proof carousel
  */
 export default function ProofFeed({
-  items: itemsProp = [],
+  items = [],
   visibleCount = 4,
   cycleMs = 3000,
   blurTransition = false,
   bigSlides = false,
 }) {
-  const [items, setItems] = useState(itemsProp || []);
-  const [loadedFromFunction, setLoadedFromFunction] = useState(false);
-
-  // keep in sync if parent passes items
-  useEffect(() => {
-    if (itemsProp && itemsProp.length) {
-      setItems(itemsProp);
-      setLoadedFromFunction(true); // we have data, no need to auto-fetch
-    }
-  }, [itemsProp]);
-
-  // fallback: if parent didn't give any items, pull from Netlify function
-  useEffect(() => {
-    if (itemsProp && itemsProp.length) return; // parent owns it
-
-    (async () => {
-      try {
-        const res = await fetch("/.netlify/functions/logan-proof-feed");
-        if (!res.ok) {
-          console.error("logan-proof-feed status", res.status);
-          setLoadedFromFunction(true);
-          return;
-        }
-        const json = await res.json();
-        if (Array.isArray(json)) {
-          setItems(json);
-        } else {
-          setItems([]);
-        }
-      } catch (err) {
-        console.error("logan-proof-feed fetch error", err);
-        setItems([]);
-      } finally {
-        setLoadedFromFunction(true);
-      }
-    })();
-  }, [itemsProp]);
-
   const total = items.length;
-
-  // Auto-cycle like Logan’s bar
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
     if (total <= visibleCount) return;
-    const id = setInterval(() => {
-      setIndex((prev) => (prev + 1) % total);
-    }, cycleMs);
+    const id = setInterval(
+      () => setIndex((prev) => (prev + 1) % total),
+      cycleMs
+    );
     return () => clearInterval(id);
   }, [total, visibleCount, cycleMs]);
 
   const visibleItems = useMemo(() => {
     if (!total) return [];
     if (total <= visibleCount) return items;
-
     const out = [];
     for (let i = 0; i < visibleCount; i += 1) {
       out.push(items[(index + i) % total]);
@@ -106,21 +56,11 @@ export default function ProofFeed({
     return out;
   }, [items, index, total, visibleCount]);
 
-  // Only show the "Recent wins" message after we've tried to load
-  if (!total && loadedFromFunction) {
-    return (
-      <div className="text-sm text-white/60 px-2 py-4 text-center">
-        Recent wins will show up here once they&apos;re added.
-      </div>
-    );
-  }
-
-  // While loading (no items yet, but not done), just render nothing so the parent skeleton shows
+  // If no items, render nothing (no "Recent wins" text)
   if (!total) return null;
 
   return (
     <div className="w-full">
-      {/* inner cards grid (Discord-style bar) */}
       <div
         className={`grid gap-3 ${
           bigSlides
@@ -129,15 +69,10 @@ export default function ProofFeed({
         }`}
       >
         {visibleItems.map((item) => (
-          <ProofCard
-            key={item.id}
-            item={item}
-            blur={blurTransition}
-          />
+          <ProofCard key={item.id} item={item} blur={blurTransition} />
         ))}
       </div>
 
-      {/* dots like Logan’s */}
       {total > visibleCount && (
         <div className="mt-3 flex justify-center gap-1">
           {Array.from({ length: Math.min(total, 10) }).map((_, i) => (
@@ -181,7 +116,6 @@ function ProofCard({ item, blur }) {
         .filter(Boolean)
         .join(" ")}
     >
-      {/* top row: avatar, name, date (Discord header) */}
       <div className="flex items-center gap-3 mb-2">
         {avatar_url ? (
           <img
@@ -206,14 +140,12 @@ function ProofCard({ item, blur }) {
         )}
       </div>
 
-      {/* middle: big green amount like Logan bar */}
       {amountStr && (
         <div className="text-sm font-semibold text-emerald-300 leading-tight">
           {amountStr}
         </div>
       )}
 
-      {/* bottom: message text (product / notes) */}
       {message_text && (
         <p className="mt-1 text-[11px] text-white/80 leading-snug line-clamp-3">
           {message_text}
