@@ -193,34 +193,39 @@ export default function AgentPublicLanding() {
 
       setSite(siteRow);
 
-      // 2) questions + proof for this site
-      const [
-        { data: qs, error: qErr },
-        { data: proofRows, error: proofErr },
-      ] = await Promise.all([
-        supabase
-          .from("mm_agent_questions")
-          .select("*")
-          .eq("agent_site_id", siteRow.id)
-          .eq("is_active", true)
-          .order("sort_order", { ascending: true }),
-        supabase
-          .from("mm_agent_proof_posts")
-          .select(
-            "id, display_name, avatar_url, message_text, amount_cents, currency, happened_at, screenshot_url, created_at, is_pinned, is_published"
-          )
-          .eq("agent_site_id", siteRow.id)
-          .eq("is_published", true)
-          .order("is_pinned", { ascending: false })
-          .order("happened_at", { ascending: false })
-          .order("created_at", { ascending: false }),
-      ]);
+      // 2) questions (from this project's DB) + proof (from Logan's Netlify function)
+      try {
+        const [qRes, proofRes] = await Promise.all([
+          supabase
+            .from("mm_agent_questions")
+            .select("*")
+            .eq("agent_site_id", siteRow.id)
+            .eq("is_active", true)
+            .order("sort_order", { ascending: true }),
+          fetch("/.netlify/functions/logan-proof-feed"),
+        ]);
 
-      if (qErr) console.error(qErr);
-      if (proofErr) console.error(proofErr);
+        if (qRes.error) {
+          console.error(qRes.error);
+        }
+        setQuestions(qRes.data || []);
 
-      setQuestions(qs || []);
-      setProof(proofRows || []);
+        if (proofRes.ok) {
+          const json = await proofRes.json();
+          if (Array.isArray(json)) {
+            setProof(json);
+          } else {
+            setProof([]);
+          }
+        } else {
+          console.error("logan-proof-feed error status:", proofRes.status);
+          setProof([]);
+        }
+      } catch (fetchErr) {
+        console.error("Error loading questions/proof:", fetchErr);
+        setProof([]);
+      }
+
       setLoading(false);
     }
 
@@ -482,7 +487,7 @@ export default function AgentPublicLanding() {
             )}
           </div>
 
-          {/* PROOF (agent-specific, Logan-style carousel) */}
+          {/* PROOF (from Logan Netlify function) */}
           <div className="mt-6">
             {loading ? (
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
