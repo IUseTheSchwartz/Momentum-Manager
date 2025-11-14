@@ -1,7 +1,6 @@
 // File: src/pages/AgentAvailability.jsx
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient.js";
-import { useAuth } from "../auth.jsx";
 
 const DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const DAY_LABELS = {
@@ -34,7 +33,6 @@ function stringifyRanges(ranges) {
 }
 
 export default function AgentAvailability() {
-  const { user } = useAuth();
   const [agentSite, setAgentSite] = useState(null);
   const [availability, setAvailability] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -43,17 +41,33 @@ export default function AgentAvailability() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    if (!user) return;
+    let cancelled = false;
 
     async function load() {
       setLoading(true);
       setErr(null);
+
+      const {
+        data: { user },
+        error: userErr,
+      } = await supabase.auth.getUser();
+
+      if (cancelled) return;
+
+      if (userErr || !user) {
+        console.error(userErr);
+        setErr("You must be logged in to manage availability.");
+        setLoading(false);
+        return;
+      }
 
       const { data: site, error: siteErr } = await supabase
         .from("mm_agent_sites")
         .select("id")
         .eq("agent_user_id", user.id)
         .maybeSingle();
+
+      if (cancelled) return;
 
       if (siteErr || !site) {
         console.error(siteErr);
@@ -70,9 +84,11 @@ export default function AgentAvailability() {
         .eq("agent_site_id", site.id)
         .maybeSingle();
 
+      if (cancelled) return;
+
       if (aErr) {
         console.error(aErr);
-        setErr("Failed to load availability");
+        setErr("Failed to load availability.");
         setLoading(false);
         return;
       }
@@ -103,7 +119,11 @@ export default function AgentAvailability() {
     }
 
     load();
-  }, [user]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function update(field, value) {
     setAvailability((prev) => ({ ...prev, [field]: value }));
@@ -146,7 +166,7 @@ export default function AgentAvailability() {
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
       console.error(e);
-      setErr("Failed to save availability");
+      setErr("Failed to save availability.");
     } finally {
       setSaving(false);
     }
@@ -198,7 +218,9 @@ export default function AgentAvailability() {
           />
         </div>
         <div className="space-y-1 text-xs">
-          <label className="text-white/60">Buffer between calls (minutes)</label>
+          <label className="text-white/60">
+            Buffer between calls (minutes)
+          </label>
           <input
             type="number"
             min={0}
@@ -219,7 +241,10 @@ export default function AgentAvailability() {
             className="w-full rounded bg-white/5 border border-white/15 px-3 py-2 text-sm"
             value={availability.booking_window_days}
             onChange={(e) =>
-              update("booking_window_days", Number(e.target.value) || 0)
+              update(
+                "booking_window_days",
+                Number(e.target.value) || 0
+              )
             }
           />
         </div>
