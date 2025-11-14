@@ -1,12 +1,10 @@
 // File: src/pages/AgentLeads.jsx
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient.js";
-import { useAuth } from "../auth.jsx";
 
 const STAGES = ["new", "applied", "booked", "no-show", "closed"];
 
 export default function AgentLeads() {
-  const { user } = useAuth();
   const [agentSite, setAgentSite] = useState(null);
   const [rows, setRows] = useState([]);
   const [stageFilter, setStageFilter] = useState("");
@@ -15,17 +13,33 @@ export default function AgentLeads() {
   const [savingId, setSavingId] = useState(null);
 
   useEffect(() => {
-    if (!user) return;
+    let cancelled = false;
 
     async function load() {
       setLoading(true);
       setErr(null);
+
+      const {
+        data: { user },
+        error: userErr,
+      } = await supabase.auth.getUser();
+
+      if (cancelled) return;
+
+      if (userErr || !user) {
+        console.error(userErr);
+        setErr("You must be logged in to view leads.");
+        setLoading(false);
+        return;
+      }
 
       const { data: site, error: siteErr } = await supabase
         .from("mm_agent_sites")
         .select("id")
         .eq("agent_user_id", user.id)
         .maybeSingle();
+
+      if (cancelled) return;
 
       if (siteErr || !site) {
         console.error(siteErr);
@@ -42,9 +56,11 @@ export default function AgentLeads() {
         .eq("agent_site_id", site.id)
         .order("created_at", { ascending: false });
 
+      if (cancelled) return;
+
       if (lErr) {
         console.error(lErr);
-        setErr("Failed to load leads");
+        setErr("Failed to load leads.");
         setLoading(false);
         return;
       }
@@ -54,7 +70,11 @@ export default function AgentLeads() {
     }
 
     load();
-  }, [user]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function updateStage(id, stage) {
     setSavingId(id);
@@ -72,7 +92,7 @@ export default function AgentLeads() {
       );
     } catch (e) {
       console.error(e);
-      alert("Failed to update stage");
+      alert("Failed to update stage.");
     } finally {
       setSavingId(null);
     }
