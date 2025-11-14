@@ -7,6 +7,17 @@ function Skeleton({ className = "" }) {
   return <div className={`animate-pulse rounded-md bg-white/10 ${className}`} />;
 }
 
+function escapeHtml(str = "") {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+const SITE_URL =
+  import.meta.env.VITE_SITE_URL || window.location.origin;
+
 export default function ThankYou() {
   const [searchParams] = useSearchParams();
   const leadId = searchParams.get("lead_id");
@@ -14,19 +25,20 @@ export default function ThankYou() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [site, setSite] = useState(null);
+  const [lead, setLead] = useState(null);
 
   useEffect(() => {
     async function load() {
-      if (!leadId) {
-        // still show generic thank-you, just skip lookup
-        setLoading(false);
-        return;
-      }
-
       try {
+        if (!leadId) {
+          setLoading(false);
+          return;
+        }
+
+        // fetch lead (with answers + stage flags)
         const { data: leadRow, error: leadErr } = await supabase
           .from("mm_agent_leads")
-          .select("agent_site_id")
+          .select("*")
           .eq("id", leadId)
           .maybeSingle();
 
@@ -37,6 +49,9 @@ export default function ThankYou() {
           return;
         }
 
+        setLead(leadRow);
+
+        // fetch site
         const { data: siteRow, error: siteErr } = await supabase
           .from("mm_agent_sites")
           .select("*")
@@ -52,6 +67,11 @@ export default function ThankYou() {
 
         setSite(siteRow);
         setLoading(false);
+
+        // mark stage complete + send final email ONCE
+        if (!leadRow.completed_emailed) {
+          await finalizeAndNotify(siteRow, leadRow);
+        }
       } catch (e) {
         console.error(e);
         setErr("Something went wrong loading your confirmation.");
@@ -62,7 +82,7 @@ export default function ThankYou() {
     load();
   }, [leadId]);
 
-  // Meta Pixel style event (safe even if fbq missing)
+  // Meta Pixel: Schedule event on thank-you page
   useEffect(() => {
     if (window.fbq) {
       window.fbq("track", "Schedule");
@@ -97,7 +117,7 @@ export default function ThankYou() {
 
         <Link
           to={homeHref}
-          className="text-sm text-white/70 hover:text-white underline-offset-2 hover:underline"
+          className="text-sm text.white/70 hover:text-white underline-offset-2 hover:underline"
         >
           Back to main page
         </Link>
@@ -134,12 +154,99 @@ export default function ThankYou() {
             </Link>
           </>
         )}
-        {err && (
-          <div className="mt-4 text-xs text-red-400">
-            {err}
-          </div>
-        )}
+        {err && <div className="mt-4 text-xs text-red-400">{err}</div>}
       </main>
     </div>
   );
+}
+
+async function finalizeAndNotify(site, lead) {
+  try {
+    const nowIso = new Date().toISOString();
+
+    // 1) mark as fully complete for future runs / incomplete checker
+    await supabase
+      .from("mm_agent_leads")
+      .update({
+        stage: "complete",
+        last_activity_at: nowIso,
+        completed_emailed: true,
+      })
+      .eq("id", lead.id);
+
+    const agentName = site?.about_name || "Your Agent";
+    const siteName = site?.site_name || "Momentum Financial";
+    const leadName = lead.full_name || "Lead";
+    const answers = Array.isArray(lead.answers) ? lead.answers : [];
+
+    const safeAgent = escapeHtml(agentName);
+    const safeLead = escapeHtml(leadName);
+    const safeEmail = escapeHtml(lead.email || "");
+    const safePhone = escapeHtml(lead.phone || "");
+    const safeSlug = escapeHtml(site.slug || "");
+
+    const answersHtml = answers
+      .filter((a) => a?.value && String(a.value).trim().length > 0)
+      .map(
+        (a) =>
+          `<li><strong>${escapeHtml(a.question)}</strong>: ${escapeHtml(
+            a.value
+          )}</li>`
+      )
+      .join("");
+
+    const answersText = answers
+      .filter((a) => a?.value && String(a.value).trim().length > 0)
+      .map((a) => `- ${a.question}: ${a.value}`)
+      .join("\n");
+
+    const html = `
+      <h3 style="margin:0 0 8px;">New application for ${safeAgent}</h3>
+      <p style="margin:0 0 8px;color:#555;">Someone just completed your recruiting application.</p>
+      <ul style="margin:0 0 12px 0;padding-left:18px;color:#111;">
+        <li><strong>Name:</strong> ${safeLead}</li>
+        <li><strong>Phone:</strong> ${safePhone}</li>
+        <li><strong>Email:</strong> ${safeEmail}</li>
+        <li><strong>Site:</strong> ${escapeHtml(siteName)} (slug: ${safeSlug})</li>
+      </ul>
+      ${
+        answersHtml
+          ? `<h4 style="margin:0 0 6px;">Application answers</h4>
+      <ul style="margin:0 0 12px 0;padding-left:18px;color:#111;">${answersHtml}</ul>`
+          : ""
+      }
+      <p style="margin-top:16px;color:#777;font-size:13px;">
+        Log into your Momentum Manager account and open the <strong>Leads</strong> tab on your site to follow up.
+      </p>`;
+
+    const text = `New application for ${agentName}
+
+Name: ${leadName}
+Phone: ${lead.phone || ""}
+Email: ${lead.email || ""}
+Site: ${siteName} (slug: ${site.slug || ""})
+
+${
+  answersText
+    ? `Application answers:\n${answersText}\n\n`
+    : ""
+}Log into Momentum Manager and open the Leads tab on your site to follow up.`;
+
+    const to = (site.notification_emails || "").trim();
+    if (!to) return;
+
+    await fetch(`${SITE_URL}/.netlify/functions/send-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        to,
+        subject: `New application – ${leadName}`,
+        html,
+        text,
+        fromName: `${agentName} | Momentum Financial`,
+      }),
+    });
+  } catch (e) {
+    console.error("[ThankYou] finalizeAndNotify error", e);
+  }
 }
