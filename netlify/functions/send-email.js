@@ -1,5 +1,5 @@
 // File: netlify/functions/send-email.js
-const nodemailer = require("nodemailer");
+import nodemailer from "nodemailer";
 
 function stripHtml(html = "") {
   return html
@@ -12,7 +12,7 @@ function stripHtml(html = "") {
     .trim();
 }
 
-exports.handler = async function (event) {
+export const handler = async (event) => {
   try {
     if (event.httpMethod !== "POST") {
       return { statusCode: 405, body: "Method Not Allowed" };
@@ -51,7 +51,8 @@ exports.handler = async function (event) {
       auth: { user, pass },
     });
 
-    const fromHeader = `"${fromName.replace(/"/g, "'")}" <${fromEmail}>`;
+    const fromHeader = `"${(fromName || "Momentum Financial")
+      .replace(/"/g, "'")}" <${fromEmail}>`;
 
     await transporter.sendMail({
       from: fromHeader,
@@ -65,8 +66,8 @@ exports.handler = async function (event) {
         "X-MJ-TrackClick": "0",
         "List-Unsubscribe":
           "<mailto:support@logantharris.com>, <https://logantharris.com/unsubscribe>",
-        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-      },
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"
+      }
     });
 
     return { statusCode: 200, body: "ok" };
