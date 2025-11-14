@@ -14,7 +14,7 @@ import AgentPublicLanding from "./pages/AgentPublicLanding.jsx";
 import MyLandingPage from "./pages/MyLandingPage.jsx";
 import AgentSettings from "./pages/AgentSettings.jsx";
 import AgentQuestions from "./pages/AgentQuestions.jsx";
-import AgentProof from "./pages/AgentProof.jsx";
+// ❌ AgentProof removed
 import AgentLeads from "./pages/AgentLeads.jsx";
 import AgentAvailability from "./pages/AgentAvailability.jsx";
 
@@ -58,7 +58,7 @@ export default function App() {
     "/manager/members",
     "/my-landing-page",
     "/my-landing-page/questions",
-    "/my-landing-page/proof",
+    // "/my-landing-page/proof", // ❌ no longer a route
     "/my-landing-page/leads",
     "/my-landing-page/availability",
   ]);
@@ -93,7 +93,7 @@ export default function App() {
         <Route path="/my-landing-page" element={<MyLandingPage />}>
           <Route index element={<AgentSettings />} />
           <Route path="questions" element={<AgentQuestions />} />
-          <Route path="proof" element={<AgentProof />} />
+          {/* ❌ proof tab route removed */}
           <Route path="leads" element={<AgentLeads />} />
           <Route path="availability" element={<AgentAvailability />} />
         </Route>
