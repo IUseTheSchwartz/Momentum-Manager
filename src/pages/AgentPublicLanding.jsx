@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient.js";
 import { readUTM } from "../lib/utm.js";
+import ProofFeed from "../components/ProofFeed.jsx";
 import QualifyForm from "../components/QualifyForm.jsx";
 
 /* --------------------------- helpers --------------------------- */
@@ -114,9 +115,7 @@ function CreatorBar({ settings }) {
               <div className="text-sm text-white/60 leading-tight">
                 Personal page
               </div>
-              <div className="font-semibold leading-tight truncate">
-                {name}
-              </div>
+              <div className="font-semibold leading-tight truncate">{name}</div>
             </div>
           </div>
 
@@ -144,13 +143,14 @@ function CreatorBar({ settings }) {
   );
 }
 
-/* ---------------------- Main page (Logan-style layout, no proof) ---------------------- */
+/* ---------------------- Main page (Logan-style layout, with proof) ---------------------- */
 
 export default function AgentPublicLanding() {
   const { slug } = useParams();
 
   const [site, setSite] = useState(null);
   const [questions, setQuestions] = useState([]);
+  const [proof, setProof] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
 
@@ -169,13 +169,14 @@ export default function AgentPublicLanding() {
 
   const [submitting, setSubmitting] = useState(false);
 
-  /* ---------------------- Load site + questions ---------------------- */
+  /* ---------------------- Load site + questions + proof ---------------------- */
 
   useEffect(() => {
     async function load() {
       setLoading(true);
       setErr(null);
 
+      // 1) site by slug
       const { data: siteRow, error: siteErr } = await supabase
         .from("mm_agent_sites")
         .select("*")
@@ -192,18 +193,34 @@ export default function AgentPublicLanding() {
 
       setSite(siteRow);
 
-      const { data: qs, error: qErr } = await supabase
-        .from("mm_agent_questions")
-        .select("*")
-        .eq("agent_site_id", siteRow.id)
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true });
+      // 2) questions + proof for this site
+      const [
+        { data: qs, error: qErr },
+        { data: proofRows, error: proofErr },
+      ] = await Promise.all([
+        supabase
+          .from("mm_agent_questions")
+          .select("*")
+          .eq("agent_site_id", siteRow.id)
+          .eq("is_active", true)
+          .order("sort_order", { ascending: true }),
+        supabase
+          .from("mm_agent_proof_posts")
+          .select(
+            "id, display_name, avatar_url, message_text, amount_cents, currency, happened_at, screenshot_url, created_at, is_pinned, is_published"
+          )
+          .eq("agent_site_id", siteRow.id)
+          .eq("is_published", true)
+          .order("is_pinned", { ascending: false })
+          .order("happened_at", { ascending: false })
+          .order("created_at", { ascending: false }),
+      ]);
 
-      if (qErr) {
-        console.error(qErr);
-      }
+      if (qErr) console.error(qErr);
+      if (proofErr) console.error(proofErr);
 
       setQuestions(qs || []);
+      setProof(proofRows || []);
       setLoading(false);
     }
 
@@ -420,8 +437,7 @@ export default function AgentPublicLanding() {
             ) : (
               <button
                 onClick={openModal}
-                className="inline-flex w-full sm:w-auto items-center justify-center rounded-xl bg.white px-6 py-3
-                           font-semibold text-black shadow hover:shadow-lg active:scale-[.99] bg-white"
+                className="inline-flex w-full sm:w-auto items-center justify-center rounded-xl bg-white px-6 py-3 font-semibold text-black shadow hover:shadow-lg active:scale-[.99]"
               >
                 Book Call
               </button>
@@ -463,6 +479,29 @@ export default function AgentPublicLanding() {
                   {site?.hero_sub || "High Expectations. High Results."}
                 </p>
               </>
+            )}
+          </div>
+
+          {/* PROOF (agent-specific, Logan-style carousel) */}
+          <div className="mt-6">
+            {loading ? (
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <Skeleton key={i} className="h-28 w-full rounded-xl" />
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                <ProofFeed
+                  items={proof}
+                  visibleCount={4}
+                  cycleMs={3000}
+                  blurTransition
+                  bigSlides
+                />
+              </div>
             )}
           </div>
         </section>
