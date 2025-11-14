@@ -1,3 +1,4 @@
+// File: src/App.jsx
 import { Routes, Route, Navigate } from "react-router-dom";
 
 // Public pages
@@ -6,8 +7,15 @@ import Login from "./pages/Login.jsx";
 import Signup from "./pages/Signup.jsx";
 import MomentumLeadManager from "./pages/MomentumLeadManager.jsx";
 import GetMyLandingPage from "./pages/GetMyLandingPage.jsx";
-import AgentLogin from "./pages/AgentLogin.jsx";       // 👈 NEW
-import MyLandingPage from "./pages/MyLandingPage.jsx"; // 👈 NEW
+import AgentLogin from "./pages/AgentLogin.jsx";
+
+// Agent site pages
+import MyLandingPage from "./pages/MyLandingPage.jsx";
+import AgentSettings from "./pages/AgentSettings.jsx";
+import AgentQuestions from "./pages/AgentQuestions.jsx";
+import AgentProof from "./pages/AgentProof.jsx";
+import AgentLeads from "./pages/AgentLeads.jsx";
+import AgentAvailability from "./pages/AgentAvailability.jsx";
 
 // Auth'd pages
 import Leads from "./pages/Leads.jsx";
@@ -36,7 +44,7 @@ export default function App() {
           {/* Public */}
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/login-agent" element={<AgentLogin />} /> {/* NEW */}
+          <Route path="/login-agent" element={<AgentLogin />} />
           <Route path="/signup" element={<Signup />} />
           <Route
             path="/momentum-lead-manager"
@@ -53,7 +61,15 @@ export default function App() {
           {/* Auth required */}
           <Route element={<ProtectedRoute />}>
             <Route path="/leads" element={<Leads />} />
-            <Route path="/my-landing-page" element={<MyLandingPage />} /> {/* NEW */}
+
+            {/* Agent site (tabbed) */}
+            <Route path="/my-landing-page" element={<MyLandingPage />}>
+              <Route index element={<AgentSettings />} />
+              <Route path="questions" element={<AgentQuestions />} />
+              <Route path="proof" element={<AgentProof />} />
+              <Route path="leads" element={<AgentLeads />} />
+              <Route path="availability" element={<AgentAvailability />} />
+            </Route>
 
             {/* Manager-only */}
             <Route element={<RoleGate role="manager" />}>
