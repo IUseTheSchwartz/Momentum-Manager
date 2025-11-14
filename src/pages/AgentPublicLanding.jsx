@@ -226,11 +226,14 @@ async function sendLeadNotification({ site, lead, answers }) {
 
   const { subject, html, text } = buildAgentLeadEmail({ site, lead, answers });
 
+  // 🔹 Use "Agent Name | Momentum Financial" as the FROM display name
+  const fromName = `${site?.about_name || "Your Agent"} | Momentum Financial`;
+
   try {
     const res = await fetch("/.netlify/functions/send-email", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to, subject, html, text }),
+      body: JSON.stringify({ to, subject, html, text, fromName }),
     });
     if (!res.ok) {
       const t = await res.text().catch(() => "");
@@ -598,7 +601,7 @@ export default function AgentPublicLanding() {
           {/* PROOF */}
           <div className="mt-6">
             {loading ? (
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+              <div className="rounded-2xl border border-white/10 bg.white/[0.03] p-3">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {Array.from({ length: 4 }).map((_, i) => (
                     <Skeleton key={i} className="h-28 w-full rounded-xl" />
