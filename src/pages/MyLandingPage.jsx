@@ -4,7 +4,7 @@ import { Link, Outlet, useLocation } from "react-router-dom";
 const TABS = [
   { key: "settings", slug: "", label: "settings" },
   { key: "questions", slug: "questions", label: "questions" },
-  { key: "proof", slug: "proof", label: "proof" },
+  // { key: "proof", slug: "proof", label: "proof" }, // ❌ removed
   { key: "leads", slug: "leads", label: "leads" },
   { key: "availability", slug: "availability", label: "availability" },
 ];
