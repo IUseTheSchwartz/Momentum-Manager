@@ -1,16 +1,4 @@
-// File: netlify/functions/send-email.js
 import nodemailer from "nodemailer";
-
-function stripHtml(html = "") {
-  return html
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<\/(p|div|br|h\d)>/gi, "\n")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
 
 export const handler = async (event) => {
   try {
@@ -18,7 +6,7 @@ export const handler = async (event) => {
       return { statusCode: 405, body: "Method Not Allowed" };
     }
 
-    // { subject, text, html?, to?, replyTo? }
+    // payload: { subject, text, html?, to?, replyTo?, fromName?, fromEmail? }
     const payload = JSON.parse(event.body || "{}");
 
     const toList = (payload.to || process.env.SMTP_TO || "")
@@ -29,10 +17,15 @@ export const handler = async (event) => {
     const host = process.env.SMTP_HOST;
     const user = process.env.SMTP_USER;
     const pass = process.env.SMTP_PASS;
-    const fromEmail = process.env.SMTP_FROM || user;
-    const fromName = process.env.SMTP_FROM_NAME || "Momentum Financial";
+    const envFromEmail = process.env.SMTP_FROM || user;
+    const envFromName = process.env.SMTP_FROM_NAME || "Momentum Financial";
     const port = Number(process.env.SMTP_PORT || 587);
     const secure = port === 465;
+
+    // 🔹 allow per-email override, but fall back to env
+    const fromEmail = payload.fromEmail || envFromEmail;
+    const fromName = payload.fromName || envFromName;
+    const fromHeader = `"${String(fromName).replace(/"/g, "'")}" <${fromEmail}>`;
 
     if (!host || !user || !pass || toList.length === 0) {
       console.log("[send-email] Skipping (missing SMTP env or recipients)", {
@@ -51,9 +44,6 @@ export const handler = async (event) => {
       auth: { user, pass },
     });
 
-    const fromHeader = `"${(fromName || "Momentum Financial")
-      .replace(/"/g, "'")}" <${fromEmail}>`;
-
     await transporter.sendMail({
       from: fromHeader,
       to: toList,
@@ -64,10 +54,9 @@ export const handler = async (event) => {
       headers: {
         "X-MJ-TrackOpen": "0",
         "X-MJ-TrackClick": "0",
-        "List-Unsubscribe":
-          "<mailto:support@logantharris.com>, <https://logantharris.com/unsubscribe>",
-        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"
-      }
+        "List-Unsubscribe": `<mailto:support@logantharris.com>, <https://logantharris.com/unsubscribe>`,
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      },
     });
 
     return { statusCode: 200, body: "ok" };
@@ -76,3 +65,14 @@ export const handler = async (event) => {
     return { statusCode: 200, body: "ok (email skipped due to error)" };
   }
 };
+
+function stripHtml(html = "") {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<\/(p|div|br|h\d)>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
