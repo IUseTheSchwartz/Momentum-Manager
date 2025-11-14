@@ -1,43 +1,36 @@
 // File: src/pages/AgentAvailability.jsx
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient.js";
 
-const DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
-const DAY_LABELS = {
-  mon: "Monday",
-  tue: "Tuesday",
-  wed: "Wednesday",
-  thu: "Thursday",
-  fri: "Friday",
-  sat: "Saturday",
-  sun: "Sunday",
+const DAYS = [
+  { key: "mon", label: "Mon" },
+  { key: "tue", label: "Tue" },
+  { key: "wed", label: "Wed" },
+  { key: "thu", label: "Thu" },
+  { key: "fri", label: "Fri" },
+  { key: "sat", label: "Sat" },
+  { key: "sun", label: "Sun" },
+];
+
+const DEFAULT_WEEKLY = {
+  mon: [["09:00", "21:00"]],
+  tue: [["09:00", "21:00"]],
+  wed: [["09:00", "21:00"]],
+  thu: [["09:00", "21:00"]],
+  fri: [["09:00", "21:00"]],
+  sat: [],
+  sun: [],
 };
 
-function parseRangeString(str) {
-  if (!str) return [];
-  return str
-    .split(",")
-    .map((chunk) => chunk.trim())
-    .filter(Boolean)
-    .map((chunk) => {
-      const [start, end] = chunk.split("-").map((t) => t.trim());
-      if (!start || !end) return null;
-      return [start, end];
-    })
-    .filter(Boolean);
-}
-
-function stringifyRanges(ranges) {
-  if (!Array.isArray(ranges) || !ranges.length) return "";
-  return ranges.map(([start, end]) => `${start}-${end}`).join(", ");
+function Skeleton({ className = "" }) {
+  return <div className={`animate-pulse rounded-md bg-white/10 ${className}`} />;
 }
 
 export default function AgentAvailability() {
-  const [agentSite, setAgentSite] = useState(null);
-  const [availability, setAvailability] = useState(null);
+  const [model, setModel] = useState(null); // { id?, tz, slot_minutes, buffer_minutes, min_lead_hours, booking_window_days, weekly }
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState(null);
+  const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -45,239 +38,350 @@ export default function AgentAvailability() {
 
     async function load() {
       setLoading(true);
-      setErr(null);
+      setError("");
 
-      const {
-        data: { user },
-        error: userErr,
-      } = await supabase.auth.getUser();
-
-      if (cancelled) return;
-
-      if (userErr || !user) {
-        console.error(userErr);
-        setErr("You must be logged in to manage availability.");
-        setLoading(false);
-        return;
-      }
-
-      const { data: site, error: siteErr } = await supabase
-        .from("mm_agent_sites")
-        .select("id")
-        .eq("agent_user_id", user.id)
-        .maybeSingle();
-
-      if (cancelled) return;
-
-      if (siteErr || !site) {
-        console.error(siteErr);
-        setErr("You need to configure your Settings first.");
-        setLoading(false);
-        return;
-      }
-
-      setAgentSite(site);
-
-      const { data: avail, error: aErr } = await supabase
-        .from("mm_agent_availability")
+      const { data, error: avErr } = await supabase
+        .from("mf_availability")
         .select("*")
-        .eq("agent_site_id", site.id)
+        .order("updated_at", { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (cancelled) return;
 
-      if (aErr) {
-        console.error(aErr);
-        setErr("Failed to load availability.");
+      if (avErr) {
+        console.error(avErr);
+        setError("Failed to load availability.");
         setLoading(false);
         return;
       }
 
-      if (avail) {
-        setAvailability(avail);
-      } else {
-        setAvailability({
-          agent_site_id: site.id,
+      if (!data) {
+        // no row yet -> use sensible defaults
+        setModel({
+          id: null,
           tz: "America/Chicago",
           slot_minutes: 30,
-          buffer_minutes: 15,
-          min_lead_hours: 4,
+          buffer_minutes: 30,
+          min_lead_hours: 12,
           booking_window_days: 14,
-          weekly: {
-            mon: [["09:00", "17:00"]],
-            tue: [["09:00", "17:00"]],
-            wed: [["09:00", "17:00"]],
-            thu: [["09:00", "17:00"]],
-            fri: [["09:00", "17:00"]],
-            sat: [],
-            sun: [],
-          },
+          weekly: { ...DEFAULT_WEEKLY },
         });
+        setLoading(false);
+        return;
       }
 
+      let weekly = data.weekly || {};
+      if (typeof weekly === "string") {
+        try {
+          weekly = JSON.parse(weekly);
+        } catch {
+          weekly = {};
+        }
+      }
+      // normalize weekly shape and add defaults if missing
+      const normWeekly = { ...DEFAULT_WEEKLY };
+      for (const d of DAYS) {
+        const raw = weekly[d.key];
+        if (Array.isArray(raw)) {
+          normWeekly[d.key] = raw.map((pair) => {
+            if (
+              Array.isArray(pair) &&
+              typeof pair[0] === "string" &&
+              typeof pair[1] === "string"
+            ) {
+              return [pair[0], pair[1]];
+            }
+            return ["09:00", "21:00"];
+          });
+        }
+      }
+
+      setModel({
+        id: data.id,
+        tz: data.tz || "America/Chicago",
+        slot_minutes: data.slot_minutes ?? 30,
+        buffer_minutes: data.buffer_minutes ?? 30,
+        min_lead_hours: data.min_lead_hours ?? 12,
+        booking_window_days: data.booking_window_days ?? 14,
+        weekly: normWeekly,
+      });
       setLoading(false);
     }
 
     load();
-
     return () => {
       cancelled = true;
     };
   }, []);
 
-  function update(field, value) {
-    setAvailability((prev) => ({ ...prev, [field]: value }));
+  function updateField(field, value) {
+    setModel((prev) => ({ ...prev, [field]: value }));
   }
 
-  function updateDay(day, value) {
-    const weekly = { ...(availability?.weekly || {}) };
-    weekly[day] = parseRangeString(value);
-    setAvailability((prev) => ({ ...prev, weekly }));
+  function updateWeekly(dayKey, updater) {
+    setModel((prev) => {
+      const current = prev?.weekly || {};
+      const dayRanges = current[dayKey] || [];
+      const nextRanges = updater(dayRanges);
+      return {
+        ...prev,
+        weekly: {
+          ...current,
+          [dayKey]: nextRanges,
+        },
+      };
+    });
   }
 
-  async function save() {
-    if (!agentSite || !availability) return;
+  function addRange(dayKey) {
+    updateWeekly(dayKey, (ranges) => [
+      ...ranges,
+      ["09:00", "21:00"], // default for new range
+    ]);
+  }
 
+  function updateRange(dayKey, idx, which, value) {
+    // which: "start" | "end"
+    updateWeekly(dayKey, (ranges) =>
+      ranges.map((r, i) =>
+        i === idx ? [which === "start" ? value : r[0], which === "end" ? value : r[1]] : r
+      )
+    );
+  }
+
+  function removeRange(dayKey, idx) {
+    updateWeekly(dayKey, (ranges) => ranges.filter((_, i) => i !== idx));
+  }
+
+  async function saveAll() {
+    if (!model) return;
     setSaving(true);
-    setErr(null);
+    setError("");
+    setSaved(false);
 
     try {
+      // Clean weekly: remove empty / invalid ranges
+      const cleanedWeekly = {};
+      for (const d of DAYS) {
+        const list = model.weekly?.[d.key] || [];
+        const cleaned = list.filter((pair) => {
+          const [s, e] = pair || [];
+          return typeof s === "string" && typeof e === "string" && s && e;
+        });
+        cleanedWeekly[d.key] = cleaned;
+      }
+
       const payload = {
-        agent_site_id: agentSite.id,
-        tz: availability.tz,
-        slot_minutes: availability.slot_minutes,
-        buffer_minutes: availability.buffer_minutes,
-        min_lead_hours: availability.min_lead_hours,
-        booking_window_days: availability.booking_window_days,
-        weekly: availability.weekly,
+        tz: model.tz || "America/Chicago",
+        slot_minutes: Number(model.slot_minutes) || 30,
+        buffer_minutes: Number(model.buffer_minutes) || 0,
+        min_lead_hours: Number(model.min_lead_hours) || 0,
+        booking_window_days: Number(model.booking_window_days) || 14,
+        weekly: cleanedWeekly,
         updated_at: new Date().toISOString(),
       };
 
-      const { data, error } = await supabase
-        .from("mm_agent_availability")
-        .upsert(payload, { onConflict: "agent_site_id" })
-        .select("*")
-        .single();
+      if (model.id) {
+        const { error: updErr } = await supabase
+          .from("mf_availability")
+          .update(payload)
+          .eq("id", model.id);
+        if (updErr) throw updErr;
+      } else {
+        const { data: inserted, error: insErr } = await supabase
+          .from("mf_availability")
+          .insert([payload])
+          .select()
+          .single();
+        if (insErr) throw insErr;
+        setModel((prev) => ({ ...prev, id: inserted.id }));
+      }
 
-      if (error) throw error;
-
-      setAvailability(data);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch (e) {
-      console.error(e);
-      setErr("Failed to save availability.");
+    } catch (err) {
+      console.error(err);
+      setError("Failed to save availability.");
     } finally {
       setSaving(false);
     }
   }
 
-  if (loading) {
+  if (loading || !model) {
     return (
-      <div className="space-y-3">
-        <div className="h-5 w-40 bg-white/10 rounded animate-pulse" />
-        <div className="h-32 w-full bg-white/5 rounded animate-pulse" />
+      <div className="space-y-4">
+        <Skeleton className="h-5 w-40" />
+        <Skeleton className="h-24 w-full" />
       </div>
     );
   }
 
-  if (err) {
-    return <div className="text-sm text-red-400">{err}</div>;
-  }
-
   return (
-    <div className="space-y-4">
-      <header className="space-y-1">
+    <div className="space-y-5">
+      <div>
         <h2 className="text-lg font-semibold">Availability</h2>
         <p className="text-xs text-white/60">
-          This controls when prospects can book calls on your calendar from the
-          public site. (We&apos;ll wire the full scheduler in next.)
+          These hours control the booking times shown on your recruiting page.
+          Slots already booked are automatically greyed out and can’t be
+          selected.
         </p>
-      </header>
+      </div>
 
-      {/* core settings */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-1 text-xs">
-          <label className="text-white/60">Timezone</label>
-          <input
-            className="w-full rounded bg-white/5 border border-white/15 px-3 py-2 text-sm"
-            value={availability.tz}
-            onChange={(e) => update("tz", e.target.value)}
-          />
+      {/* Top config row */}
+      <div className="grid gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4 md:grid-cols-2 lg:grid-cols-3">
+        {/* Timezone */}
+        <div className="space-y-1">
+          <label className="text-xs text-white/60">Timezone</label>
+          <select
+            className="w-full rounded-lg bg-white/5 border border-white/15 px-3 py-2 text-sm"
+            value={model.tz}
+            onChange={(e) => updateField("tz", e.target.value)}
+          >
+            <option value="America/Chicago">America/Chicago (CT)</option>
+            <option value="America/New_York">America/New_York (ET)</option>
+            <option value="America/Denver">America/Denver (MT)</option>
+            <option value="America/Los_Angeles">America/Los_Angeles (PT)</option>
+          </select>
         </div>
-        <div className="space-y-1 text-xs">
-          <label className="text-white/60">Slot length (minutes)</label>
+
+        {/* Slot minutes + buffer */}
+        <div className="space-y-1">
+          <label className="text-xs text-white/60">Slot minutes</label>
           <input
             type="number"
-            min={10}
-            className="w-full rounded bg-white/5 border border-white/15 px-3 py-2 text-sm"
-            value={availability.slot_minutes}
-            onChange={(e) =>
-              update("slot_minutes", Number(e.target.value) || 0)
-            }
+            min={5}
+            max={180}
+            className="w-full rounded-lg bg-white/5 border border-white/15 px-3 py-2 text-sm"
+            value={model.slot_minutes}
+            onChange={(e) => updateField("slot_minutes", e.target.value)}
           />
+          <p className="text-[11px] text-white/40">
+            Length of each appointment slot (default 30).
+          </p>
         </div>
-        <div className="space-y-1 text-xs">
-          <label className="text-white/60">
-            Buffer between calls (minutes)
-          </label>
+
+        <div className="space-y-1">
+          <label className="text-xs text-white/60">Buffer minutes</label>
           <input
             type="number"
             min={0}
-            className="w-full rounded bg-white/5 border border-white/15 px-3 py-2 text-sm"
-            value={availability.buffer_minutes}
-            onChange={(e) =>
-              update("buffer_minutes", Number(e.target.value) || 0)
-            }
+            max={180}
+            className="w-full rounded-lg bg-white/5 border border-white/15 px-3 py-2 text-sm"
+            value={model.buffer_minutes}
+            onChange={(e) => updateField("buffer_minutes", e.target.value)}
           />
+          <p className="text-[11px] text-white/40">
+            Extra time after each call before the next slot.
+          </p>
         </div>
-        <div className="space-y-1 text-xs">
-          <label className="text-white/60">
-            Booking window (days into the future)
-          </label>
+
+        {/* Min lead + window */}
+        <div className="space-y-1">
+          <label className="text-xs text-white/60">Min lead (hours)</label>
+          <input
+            type="number"
+            min={0}
+            max={72}
+            className="w-full rounded-lg bg-white/5 border border-white/15 px-3 py-2 text-sm"
+            value={model.min_lead_hours}
+            onChange={(e) => updateField("min_lead_hours", e.target.value)}
+          />
+          <p className="text-[11px] text-white/40">
+            How far in advance someone has to book. (E.g. 12 = no same-day.)
+          </p>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-xs text-white/60">Window (days)</label>
           <input
             type="number"
             min={1}
-            className="w-full rounded bg-white/5 border border-white/15 px-3 py-2 text-sm"
-            value={availability.booking_window_days}
-            onChange={(e) =>
-              update(
-                "booking_window_days",
-                Number(e.target.value) || 0
-              )
-            }
+            max={60}
+            className="w-full rounded-lg bg-white/5 border border-white/15 px-3 py-2 text-sm"
+            value={model.booking_window_days}
+            onChange={(e) => updateField("booking_window_days", e.target.value)}
           />
+          <p className="text-[11px] text-white/40">
+            How many days into the future people can see / book.
+          </p>
         </div>
       </div>
 
-      {/* weekly ranges */}
-      <div className="space-y-2 pt-2 border-t border-white/10">
-        <h3 className="text-sm font-semibold text-white/80">
-          Weekly schedule
-        </h3>
-        <p className="text-[11px] text-white/50">
-          Use 24h format and comma-separated ranges, e.g.{" "}
-          <code>09:00-12:00, 13:00-17:00</code>.
-        </p>
+      {/* Weekly ranges */}
+      <div className="space-y-4">
+        {DAYS.map((d) => {
+          const ranges = model.weekly?.[d.key] || [];
+          return (
+            <div
+              key={d.key}
+              className="rounded-2xl border border-white/10 bg-white/[0.02] p-4"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="font-medium text-sm">{d.label}</div>
+                <button
+                  type="button"
+                  onClick={() => addRange(d.key)}
+                  className="text-xs rounded-lg border border-white/25 px-2 py-1 text-white/80 hover:bg-white/10"
+                >
+                  Add range
+                </button>
+              </div>
 
-        <div className="grid gap-3 md:grid-cols-2">
-          {DAYS.map((d) => (
-            <div key={d} className="space-y-1 text-xs">
-              <label className="text-white/60">{DAY_LABELS[d]}</label>
-              <input
-                className="w-full rounded bg-white/5 border border-white/15 px-3 py-2 text-sm"
-                value={stringifyRanges((availability.weekly || {})[d] || [])}
-                onChange={(e) => updateDay(d, e.target.value)}
-              />
+              {ranges.length === 0 && (
+                <p className="text-xs text-white/50">
+                  No availability set for this day.
+                </p>
+              )}
+
+              <div className="space-y-2">
+                {ranges.map((r, idx) => (
+                  <div
+                    key={idx}
+                    className="flex flex-wrap items-center gap-2 text-xs"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-white/60">Start</span>
+                      <input
+                        type="time"
+                        className="rounded bg-white/5 border border-white/15 px-2 py-1 text-xs"
+                        value={r[0]}
+                        onChange={(e) =>
+                          updateRange(d.key, idx, "start", e.target.value)
+                        }
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-white/60">End</span>
+                      <input
+                        type="time"
+                        className="rounded bg-white/5 border border-white/15 px-2 py-1 text-xs"
+                        value={r[1]}
+                        onChange={(e) =>
+                          updateRange(d.key, idx, "end", e.target.value)
+                        }
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeRange(d.key, idx)}
+                      className="ml-auto text-red-300 hover:text-red-200"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
-        </div>
+          );
+        })}
       </div>
 
+      {/* Save bar */}
       <div className="pt-2 flex items-center gap-3">
         <button
           type="button"
-          onClick={save}
+          onClick={saveAll}
           className="btn btn-primary text-xs"
           disabled={saving}
         >
@@ -285,10 +389,10 @@ export default function AgentAvailability() {
         </button>
         {saved && (
           <span className="text-xs text-emerald-400">
-            Availability saved to Supabase.
+            Availability saved.
           </span>
         )}
-        {err && <span className="text-xs text-red-400">{err}</span>}
+        {error && <span className="text-xs text-red-400">{error}</span>}
       </div>
     </div>
   );
