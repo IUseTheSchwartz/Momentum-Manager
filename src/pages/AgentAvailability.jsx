@@ -22,21 +22,12 @@ const DEFAULT_WEEKLY = {
   sun: [],
 };
 
-const DEFAULT_MODEL = {
-  id: null,
-  tz: "America/Chicago",
-  slot_minutes: 30,
-  buffer_minutes: 30,
-  min_lead_hours: 12,
-  booking_window_days: 14,
-  weekly: { ...DEFAULT_WEEKLY },
-};
-
 function Skeleton({ className = "" }) {
   return <div className={`animate-pulse rounded-md bg-white/10 ${className}`} />;
 }
 
 export default function AgentAvailability() {
+  const [agentSite, setAgentSite] = useState(null);
   const [model, setModel] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -51,71 +42,123 @@ export default function AgentAvailability() {
       setError("");
 
       try {
-        const { data, error: avErr } = await supabase
-          .from("mf_availability")
+        // 1) Current user
+        const {
+          data: { user },
+          error: userErr,
+        } = await supabase.auth.getUser();
+
+        if (cancelled) return;
+
+        if (userErr || !user) {
+          console.error(userErr);
+          setError("You must be logged in to manage availability.");
+          setLoading(false);
+          return;
+        }
+
+        // 2) Their agent site
+        const { data: siteRow, error: siteErr } = await supabase
+          .from("mm_agent_sites")
           .select("*")
-          .order("updated_at", { ascending: false })
-          .limit(1)
+          .eq("agent_user_id", user.id)
+          .maybeSingle();
+
+        if (cancelled) return;
+
+        if (siteErr || !siteRow) {
+          console.error(siteErr);
+          setError("You need to configure your Settings tab first.");
+          setLoading(false);
+          return;
+        }
+
+        setAgentSite(siteRow);
+
+        // 3) Per-agent availability row
+        const { data: avRow, error: avErr } = await supabase
+          .from("mm_agent_availability")
+          .select("*")
+          .eq("agent_site_id", siteRow.id)
           .maybeSingle();
 
         if (cancelled) return;
 
         if (avErr) {
           console.error("[AgentAvailability] load error:", avErr);
-          throw avErr;
-        }
-
-        if (!data) {
-          // no row yet -> use defaults
-          setModel({ ...DEFAULT_MODEL });
-          return;
-        }
-
-        let weekly = data.weekly || {};
-        if (typeof weekly === "string") {
-          try {
-            weekly = JSON.parse(weekly);
-          } catch {
-            weekly = {};
-          }
-        }
-
-        const normWeekly = { ...DEFAULT_WEEKLY };
-        for (const d of DAYS) {
-          const raw = weekly[d.key];
-          if (Array.isArray(raw)) {
-            normWeekly[d.key] = raw.map((pair) => {
-              if (
-                Array.isArray(pair) &&
-                typeof pair[0] === "string" &&
-                typeof pair[1] === "string"
-              ) {
-                return [pair[0], pair[1]];
-              }
-              return ["09:00", "21:00"];
-            });
-          }
-        }
-
-        setModel({
-          id: data.id,
-          tz: data.tz || "America/Chicago",
-          slot_minutes: data.slot_minutes ?? 30,
-          buffer_minutes: data.buffer_minutes ?? 30,
-          min_lead_hours: data.min_lead_hours ?? 12,
-          booking_window_days: data.booking_window_days ?? 14,
-          weekly: normWeekly,
-        });
-      } catch (err) {
-        if (!cancelled) {
-          console.error("[AgentAvailability] unexpected load error:", err);
           setError("Failed to load availability. Using defaults.");
-          setModel({ ...DEFAULT_MODEL });
+        }
+
+        let modelNext;
+        if (!avRow) {
+          // first time: defaults
+          modelNext = {
+            id: null,
+            agent_site_id: siteRow.id,
+            tz: "America/Chicago",
+            slot_minutes: 30,
+            buffer_minutes: 30,
+            min_lead_hours: 12,
+            booking_window_days: 14,
+            weekly: { ...DEFAULT_WEEKLY },
+          };
+        } else {
+          let weekly = avRow.weekly || {};
+          if (typeof weekly === "string") {
+            try {
+              weekly = JSON.parse(weekly);
+            } catch {
+              weekly = {};
+            }
+          }
+
+          const normWeekly = { ...DEFAULT_WEEKLY };
+          for (const d of DAYS) {
+            const raw = weekly[d.key];
+            if (Array.isArray(raw)) {
+              normWeekly[d.key] = raw.map((pair) => {
+                if (
+                  Array.isArray(pair) &&
+                  typeof pair[0] === "string" &&
+                  typeof pair[1] === "string"
+                ) {
+                  return [pair[0], pair[1]];
+                }
+                return ["09:00", "21:00"];
+              });
+            }
+          }
+
+          modelNext = {
+            id: avRow.id,
+            agent_site_id: siteRow.id,
+            tz: avRow.tz || "America/Chicago",
+            slot_minutes: avRow.slot_minutes ?? 30,
+            buffer_minutes: avRow.buffer_minutes ?? 30,
+            min_lead_hours: avRow.min_lead_hours ?? 12,
+            booking_window_days: avRow.booking_window_days ?? 14,
+            weekly: normWeekly,
+          };
+        }
+
+        setModel(modelNext);
+      } catch (err) {
+        console.error("[AgentAvailability] unexpected load error:", err);
+        if (!cancelled) {
+          setError("Failed to load availability. Using defaults.");
+          setModel({
+            id: null,
+            agent_site_id: agentSite?.id || null,
+            tz: "America/Chicago",
+            slot_minutes: 30,
+            buffer_minutes: 30,
+            min_lead_hours: 12,
+            booking_window_days: 14,
+            weekly: { ...DEFAULT_WEEKLY },
+          });
         }
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     }
 
@@ -147,7 +190,7 @@ export default function AgentAvailability() {
   function addRange(dayKey) {
     updateWeekly(dayKey, (ranges) => [
       ...ranges,
-      ["09:00", "21:00"], // default for new range
+      ["09:00", "21:00"], // default range
     ]);
   }
 
@@ -166,12 +209,13 @@ export default function AgentAvailability() {
   }
 
   async function saveAll() {
-    if (!model) return;
+    if (!model || !agentSite) return;
     setSaving(true);
     setError("");
     setSaved(false);
 
-    try {
+    try:
+    {
       const cleanedWeekly = {};
       for (const d of DAYS) {
         const list = model.weekly?.[d.key] || [];
@@ -183,6 +227,7 @@ export default function AgentAvailability() {
       }
 
       const payload = {
+        agent_site_id: agentSite.id,
         tz: model.tz || "America/Chicago",
         slot_minutes: Number(model.slot_minutes) || 30,
         buffer_minutes: Number(model.buffer_minutes) || 0,
@@ -194,16 +239,18 @@ export default function AgentAvailability() {
 
       if (model.id) {
         const { error: updErr } = await supabase
-          .from("mf_availability")
+          .from("mm_agent_availability")
           .update(payload)
           .eq("id", model.id);
+
         if (updErr) throw updErr;
       } else {
         const { data: inserted, error: insErr } = await supabase
-          .from("mf_availability")
+          .from("mm_agent_availability")
           .insert([payload])
           .select()
           .single();
+
         if (insErr) throw insErr;
         setModel((prev) => ({ ...prev, id: inserted.id }));
       }
@@ -227,14 +274,18 @@ export default function AgentAvailability() {
     );
   }
 
+  if (error && !agentSite) {
+    return <div className="text-sm text-red-400">{error}</div>;
+  }
+
   return (
     <div className="space-y-5">
       <div>
         <h2 className="text-lg font-semibold">Availability</h2>
         <p className="text-xs text-white/60">
           These hours control the booking times shown on your recruiting page.
-          Slots already booked are automatically greyed out and can’t be
-          selected.
+          Slots that are already booked are automatically greyed out and can’t
+          be selected by new applicants.
         </p>
       </div>
 
@@ -255,7 +306,7 @@ export default function AgentAvailability() {
           </select>
         </div>
 
-        {/* Slot minutes + buffer */}
+        {/* Slot minutes */}
         <div className="space-y-1">
           <label className="text-xs text-white/60">Slot minutes</label>
           <input
@@ -271,6 +322,7 @@ export default function AgentAvailability() {
           </p>
         </div>
 
+        {/* Buffer minutes */}
         <div className="space-y-1">
           <label className="text-xs text-white/60">Buffer minutes</label>
           <input
@@ -286,7 +338,7 @@ export default function AgentAvailability() {
           </p>
         </div>
 
-        {/* Min lead + window */}
+        {/* Min lead */}
         <div className="space-y-1">
           <label className="text-xs text-white/60">Min lead (hours)</label>
           <input
@@ -302,6 +354,7 @@ export default function AgentAvailability() {
           </p>
         </div>
 
+        {/* Window days */}
         <div className="space-y-1">
           <label className="text-xs text-white/60">Window (days)</label>
           <input
@@ -310,7 +363,9 @@ export default function AgentAvailability() {
             max={60}
             className="w-full rounded-lg bg-white/5 border border-white/15 px-3 py-2 text-sm"
             value={model.booking_window_days}
-            onChange={(e) => updateField("booking_window_days", e.target.value)}
+            onChange={(e) =>
+              updateField("booking_window_days", e.target.value)
+            }
           />
           <p className="text-[11px] text-white/40">
             How many days into the future people can see / book.
