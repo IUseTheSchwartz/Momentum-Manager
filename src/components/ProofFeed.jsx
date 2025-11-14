@@ -18,6 +18,7 @@ function formatDate(iso) {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
+  // Logan style: MM/DD
   return d.toLocaleDateString("en-US", {
     month: "numeric",
     day: "numeric",
@@ -25,25 +26,67 @@ function formatDate(iso) {
 }
 
 /**
- * Logan-style proof carousel
+ * Discord-style proof carousel (Logan vibe)
  *
  * Props:
- * - items:        array of proof posts
- * - visibleCount: how many cards to show at once (default 4)
- * - cycleMs:      auto-advance interval in ms (default 3000)
- * - blurTransition / bigSlides: cosmetic toggles to match Logan API
+ *  - items:        array of proof posts (optional)
+ *  - visibleCount: number of cards to show at once
+ *  - cycleMs:      auto-advance interval in ms
+ *  - blurTransition, bigSlides: cosmetic flags (kept to match Logan API)
+ *
+ * If `items` is empty or not passed, this component will
+ * automatically fetch from `/.netlify/functions/logan-proof-feed`.
  */
 export default function ProofFeed({
-  items = [],
+  items: itemsProp = [],
   visibleCount = 4,
   cycleMs = 3000,
   blurTransition = false,
   bigSlides = false,
 }) {
-  const [index, setIndex] = useState(0);
+  const [items, setItems] = useState(itemsProp || []);
+  const [loadedFromFunction, setLoadedFromFunction] = useState(false);
+
+  // keep in sync if parent passes items
+  useEffect(() => {
+    if (itemsProp && itemsProp.length) {
+      setItems(itemsProp);
+      setLoadedFromFunction(true); // we have data, no need to auto-fetch
+    }
+  }, [itemsProp]);
+
+  // fallback: if parent didn't give any items, pull from Netlify function
+  useEffect(() => {
+    if (itemsProp && itemsProp.length) return; // parent owns it
+
+    (async () => {
+      try {
+        const res = await fetch("/.netlify/functions/logan-proof-feed");
+        if (!res.ok) {
+          console.error("logan-proof-feed status", res.status);
+          setLoadedFromFunction(true);
+          return;
+        }
+        const json = await res.json();
+        if (Array.isArray(json)) {
+          setItems(json);
+        } else {
+          setItems([]);
+        }
+      } catch (err) {
+        console.error("logan-proof-feed fetch error", err);
+        setItems([]);
+      } finally {
+        setLoadedFromFunction(true);
+      }
+    })();
+  }, [itemsProp]);
+
   const total = items.length;
 
-  // auto-cycle like Logan’s
+  // Auto-cycle like Logan’s bar
+  const [index, setIndex] = useState(0);
+
   useEffect(() => {
     if (total <= visibleCount) return;
     const id = setInterval(() => {
@@ -63,16 +106,21 @@ export default function ProofFeed({
     return out;
   }, [items, index, total, visibleCount]);
 
-  if (!total) {
+  // Only show the "Recent wins" message after we've tried to load
+  if (!total && loadedFromFunction) {
     return (
       <div className="text-sm text-white/60 px-2 py-4 text-center">
-        Recent wins will show up here once they’re added.
+        Recent wins will show up here once they&apos;re added.
       </div>
     );
   }
 
+  // While loading (no items yet, but not done), just render nothing so the parent skeleton shows
+  if (!total) return null;
+
   return (
     <div className="w-full">
+      {/* inner cards grid (Discord-style bar) */}
       <div
         className={`grid gap-3 ${
           bigSlides
@@ -85,20 +133,20 @@ export default function ProofFeed({
             key={item.id}
             item={item}
             blur={blurTransition}
-            big={bigSlides}
           />
         ))}
       </div>
 
+      {/* dots like Logan’s */}
       {total > visibleCount && (
         <div className="mt-3 flex justify-center gap-1">
-          {Array.from({ length: Math.min(total, 8) }).map((_, i) => (
+          {Array.from({ length: Math.min(total, 10) }).map((_, i) => (
             <div
               key={i}
               className={`h-1 w-4 rounded-full ${
-                i === index % Math.min(total, 8)
+                i === index % Math.min(total, 10)
                   ? "bg-white/80"
-                  : "bg-white/20"
+                  : "bg-white/25"
               }`}
             />
           ))}
@@ -108,7 +156,7 @@ export default function ProofFeed({
   );
 }
 
-function ProofCard({ item, blur, big }) {
+function ProofCard({ item, blur }) {
   const {
     display_name,
     avatar_url,
@@ -118,43 +166,56 @@ function ProofCard({ item, blur, big }) {
     happened_at,
   } = item;
 
+  const amountStr = formatAmount(amount_cents, currency);
+  const dateStr = formatDate(happened_at);
+
   return (
     <article
-      className={`rounded-2xl border border-white/10 bg-black/40 px-3 py-3 flex flex-col justify-between ${
-        blur ? "backdrop-blur-sm" : ""
-      } ${big ? "min-h-[120px]" : "min-h-[100px]"}`}
+      className={[
+        "rounded-2xl border border-white/12",
+        "bg-[#111214] px-4 py-3",
+        "flex flex-col justify-between",
+        "shadow-[0_0_0_1px_rgba(255,255,255,0.03)]",
+        blur ? "backdrop-blur-sm" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
     >
-      {/* Top: avatar + name */}
-      <div className="flex items-center gap-2 mb-2">
+      {/* top row: avatar, name, date (Discord header) */}
+      <div className="flex items-center gap-3 mb-2">
         {avatar_url ? (
           <img
             src={avatar_url}
             alt={display_name || ""}
-            className="h-9 w-9 rounded-full object-cover border border-white/10"
+            className="h-9 w-9 rounded-full object-cover border border-white/20"
           />
         ) : (
           <div className="h-9 w-9 rounded-full bg-white/10" />
         )}
-        <div className="min-w-0">
-          <div className="text-xs text-white/60 leading-tight">
+
+        <div className="min-w-0 flex-1">
+          <div className="text-[13px] font-medium text-white leading-tight truncate">
             {display_name || "Agent"}
           </div>
-          {amount_cents != null && (
-            <div className="text-xs font-semibold leading-tight text-white">
-              {formatAmount(amount_cents, currency)}
-            </div>
-          )}
         </div>
-        {happened_at && (
-          <div className="ml-auto text-[11px] text-white/50">
-            {formatDate(happened_at)}
+
+        {dateStr && (
+          <div className="text-[11px] text-white/45 ml-2 shrink-0">
+            {dateStr}
           </div>
         )}
       </div>
 
-      {/* Message */}
+      {/* middle: big green amount like Logan bar */}
+      {amountStr && (
+        <div className="text-sm font-semibold text-emerald-300 leading-tight">
+          {amountStr}
+        </div>
+      )}
+
+      {/* bottom: message text (product / notes) */}
       {message_text && (
-        <p className="text-[11px] text-white/80 leading-snug line-clamp-3">
+        <p className="mt-1 text-[11px] text-white/80 leading-snug line-clamp-3">
           {message_text}
         </p>
       )}
