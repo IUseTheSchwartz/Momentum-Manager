@@ -1,5 +1,5 @@
 // File: src/pages/AgentAvailability.jsx
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient.js";
 
 const DAYS = [
@@ -41,125 +41,95 @@ export default function AgentAvailability() {
       setLoading(true);
       setError("");
 
-      try {
-        // 1) Current user
-        const {
-          data: { user },
-          error: userErr,
-        } = await supabase.auth.getUser();
+      // 1) current user
+      const {
+        data: { user },
+        error: userErr,
+      } = await supabase.auth.getUser();
 
-        if (cancelled) return;
+      if (cancelled) return;
 
-        if (userErr || !user) {
-          console.error(userErr);
-          setError("You must be logged in to manage availability.");
-          setLoading(false);
-          return;
-        }
+      if (userErr || !user) {
+        console.error(userErr);
+        setError("You must be logged in to manage availability.");
+        setLoading(false);
+        return;
+      }
 
-        // 2) Their agent site
-        const { data: siteRow, error: siteErr } = await supabase
-          .from("mm_agent_sites")
-          .select("*")
-          .eq("agent_user_id", user.id)
-          .maybeSingle();
+      // 2) their agent site
+      const { data: siteRow, error: siteErr } = await supabase
+        .from("mm_agent_sites")
+        .select("*")
+        .eq("agent_user_id", user.id)
+        .maybeSingle();
 
-        if (cancelled) return;
+      if (cancelled) return;
 
-        if (siteErr || !siteRow) {
-          console.error(siteErr);
-          setError("You need to configure your Settings tab first.");
-          setLoading(false);
-          return;
-        }
+      if (siteErr || !siteRow) {
+        console.error(siteErr);
+        setError("You need to configure your Settings tab first.");
+        setLoading(false);
+        return;
+      }
 
-        setAgentSite(siteRow);
+      setAgentSite(siteRow);
 
-        // 3) Per-agent availability row
-        const { data: avRow, error: avErr } = await supabase
-          .from("mm_agent_availability")
-          .select("*")
-          .eq("agent_site_id", siteRow.id)
-          .maybeSingle();
+      // 3) per-agent availability row
+      const { data: avRow, error: avErr } = await supabase
+        .from("mm_agent_availability")
+        .select("*")
+        .eq("agent_site_id", siteRow.id)
+        .maybeSingle();
 
-        if (cancelled) return;
+      if (cancelled) return;
 
-        if (avErr) {
-          console.error("[AgentAvailability] load error:", avErr);
-          setError("Failed to load availability. Using defaults.");
-        }
+      if (avErr) {
+        console.error("[AgentAvailability] load error:", avErr);
+        setError("Failed to load availability. Using defaults.");
+      }
 
-        let modelNext;
-        if (!avRow) {
-          // first time: defaults
-          modelNext = {
-            id: null,
-            agent_site_id: siteRow.id,
-            tz: "America/Chicago",
-            slot_minutes: 30,
-            buffer_minutes: 30,
-            min_lead_hours: 12,
-            booking_window_days: 14,
-            weekly: { ...DEFAULT_WEEKLY },
-          };
-        } else {
-          let weekly = avRow.weekly || {};
-          if (typeof weekly === "string") {
-            try {
-              weekly = JSON.parse(weekly);
-            } catch {
-              weekly = {};
-            }
+      let weekly;
+      if (!avRow) {
+        weekly = { ...DEFAULT_WEEKLY };
+      } else {
+        let rawWeekly = avRow.weekly || {};
+        if (typeof rawWeekly === "string") {
+          try {
+            rawWeekly = JSON.parse(rawWeekly);
+          } catch {
+            rawWeekly = {};
           }
+        }
 
-          const normWeekly = { ...DEFAULT_WEEKLY };
-          for (const d of DAYS) {
-            const raw = weekly[d.key];
-            if (Array.isArray(raw)) {
-              normWeekly[d.key] = raw.map((pair) => {
-                if (
+        weekly = { ...DEFAULT_WEEKLY };
+        for (const d of DAYS) {
+          const raw = rawWeekly[d.key];
+          if (Array.isArray(raw)) {
+            weekly[d.key] = raw
+              .filter(
+                (pair) =>
                   Array.isArray(pair) &&
                   typeof pair[0] === "string" &&
                   typeof pair[1] === "string"
-                ) {
-                  return [pair[0], pair[1]];
-                }
-                return ["09:00", "21:00"];
-              });
-            }
+              )
+              .map((pair) => [pair[0], pair[1]]);
           }
-
-          modelNext = {
-            id: avRow.id,
-            agent_site_id: siteRow.id,
-            tz: avRow.tz || "America/Chicago",
-            slot_minutes: avRow.slot_minutes ?? 30,
-            buffer_minutes: avRow.buffer_minutes ?? 30,
-            min_lead_hours: avRow.min_lead_hours ?? 12,
-            booking_window_days: avRow.booking_window_days ?? 14,
-            weekly: normWeekly,
-          };
         }
-
-        setModel(modelNext);
-      } catch (err) {
-        console.error("[AgentAvailability] unexpected load error:", err);
-        if (!cancelled) {
-          setError("Failed to load availability. Using defaults.");
-          setModel({
-            id: null,
-            agent_site_id: agentSite?.id || null,
-            tz: "America/Chicago",
-            slot_minutes: 30,
-            buffer_minutes: 30,
-            min_lead_hours: 12,
-            booking_window_days: 14,
-            weekly: { ...DEFAULT_WEEKLY },
-          });
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
       }
+
+      const modelNext = {
+        id: avRow?.id ?? null,
+        agent_site_id: siteRow.id,
+        tz: avRow?.tz || "America/Chicago",
+        slot_minutes: avRow?.slot_minutes ?? 30,
+        buffer_minutes: avRow?.buffer_minutes ?? 30,
+        min_lead_hours: avRow?.min_lead_hours ?? 12,
+        booking_window_days: avRow?.booking_window_days ?? 14,
+        weekly,
+      };
+
+      setModel(modelNext);
+      setLoading(false);
     }
 
     load();
@@ -188,17 +158,17 @@ export default function AgentAvailability() {
   }
 
   function addRange(dayKey) {
-    updateWeekly(dayKey, (ranges) => [
-      ...ranges,
-      ["09:00", "21:00"], // default range
-    ]);
+    updateWeekly(dayKey, (ranges) => [...ranges, ["09:00", "21:00"]]);
   }
 
   function updateRange(dayKey, idx, which, value) {
     updateWeekly(dayKey, (ranges) =>
       ranges.map((r, i) =>
         i === idx
-          ? [which === "start" ? value : r[0], which === "end" ? value : r[1]]
+          ? [
+              which === "start" ? value : r[0],
+              which === "end" ? value : r[1],
+            ]
           : r
       )
     );
@@ -214,8 +184,7 @@ export default function AgentAvailability() {
     setError("");
     setSaved(false);
 
-    try:
-    {
+    try {
       const cleanedWeekly = {};
       for (const d of DAYS) {
         const list = model.weekly?.[d.key] || [];
