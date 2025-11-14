@@ -14,7 +14,6 @@ import AgentPublicLanding from "./pages/AgentPublicLanding.jsx";
 import MyLandingPage from "./pages/MyLandingPage.jsx";
 import AgentSettings from "./pages/AgentSettings.jsx";
 import AgentQuestions from "./pages/AgentQuestions.jsx";
-// ❌ AgentProof removed
 import AgentLeads from "./pages/AgentLeads.jsx";
 import AgentAvailability from "./pages/AgentAvailability.jsx";
 
@@ -27,6 +26,11 @@ import ManagerImports from "./pages/ManagerImports.jsx";
 import ManagerLeads from "./pages/ManagerLeads.jsx";
 import ManagerInvites from "./pages/ManagerInvites.jsx";
 import ManagerMembers from "./pages/ManagerMembers.jsx";
+
+// Booking flow shells (public)
+import Schedule from "./pages/Schedule.jsx";
+import ThankYou from "./pages/ThankYou.jsx";
+import Reschedule from "./pages/Reschedule.jsx";
 
 // Debug page
 import Me from "./pages/Me.jsx";
@@ -58,9 +62,12 @@ export default function App() {
     "/manager/members",
     "/my-landing-page",
     "/my-landing-page/questions",
-    // "/my-landing-page/proof", // ❌ no longer a route
     "/my-landing-page/leads",
     "/my-landing-page/availability",
+    // booking-related public pages
+    "/schedule",
+    "/thank-you",
+    "/reschedule",
   ]);
 
   const isSingleSegment = /^\/[^/]+$/.test(path);
@@ -79,6 +86,11 @@ export default function App() {
       />
       <Route path="/get-my-landing-page" element={<GetMyLandingPage />} />
 
+      {/* Booking flow shells (public, shared across agents) */}
+      <Route path="/schedule" element={<Schedule />} />
+      <Route path="/thank-you" element={<ThankYou />} />
+      <Route path="/reschedule" element={<Reschedule />} />
+
       {/* Public agent landing (/:slug) */}
       <Route path="/:slug" element={<AgentPublicLanding />} />
 
@@ -93,7 +105,6 @@ export default function App() {
         <Route path="/my-landing-page" element={<MyLandingPage />}>
           <Route index element={<AgentSettings />} />
           <Route path="questions" element={<AgentQuestions />} />
-          {/* ❌ proof tab route removed */}
           <Route path="leads" element={<AgentLeads />} />
           <Route path="availability" element={<AgentAvailability />} />
         </Route>
