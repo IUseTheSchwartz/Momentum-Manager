@@ -2,6 +2,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient.js";
 
+const DEFAULT_INTRO_VIDEO_URL = "https://www.youtube.com/watch?v=Co1LfteWE8I";
+
 function slugFromName(name) {
   const trimmed = (name || "").trim().toLowerCase();
   if (!trimmed) return "";
@@ -87,6 +89,7 @@ export default function AgentSettings() {
             hero_title:
               "Build a high-ticket sales career with Momentum Financial",
             hero_sub: "High expectations. High results. Real mentorship.",
+            hero_youtube_url: DEFAULT_INTRO_VIDEO_URL, // 🔹 default to Logan intro video
             notification_emails: user.email || "",
             is_active: true,
             show_proof: true,
@@ -114,7 +117,10 @@ export default function AgentSettings() {
       setHeroSub(siteRow.hero_sub || "");
       setAboutName(siteRow.about_name || "");
       setAboutBio(siteRow.about_bio || "");
-      setHeroYoutubeUrl(siteRow.hero_youtube_url || "");
+      // 🔹 if no custom video set, default to Logan intro
+      setHeroYoutubeUrl(
+        siteRow.hero_youtube_url || DEFAULT_INTRO_VIDEO_URL
+      );
       setSocialYoutube(siteRow.social_youtube_url || "");
       setSocialInstagram(siteRow.social_instagram_url || "");
       setSocialSnapchat(siteRow.social_snapchat_url || "");
@@ -249,7 +255,9 @@ export default function AgentSettings() {
       {/* Core site copy */}
       <section className="space-y-3 pt-2 border-t border-white/10">
         <div className="grid gap-4 md:grid-cols-3 md:items-center">
-          <div className="text-sm text-white/70 font-semibold">Hero Title</div>
+          <div className="text-sm text-white/70 font-semibold">
+            Main headline
+          </div>
           <div className="md:col-span-2">
             <input
               className="w-full p-3 rounded bg-white/5 border border-white/10 text-sm"
@@ -261,7 +269,9 @@ export default function AgentSettings() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-3 md:items-center">
-          <div className="text-sm text-white/70 font-semibold">Hero Sub</div>
+          <div className="text-sm text-white/70 font-semibold">
+            Subtitle (under headline)
+          </div>
           <div className="md:col-span-2">
             <input
               className="w-full p-3 rounded bg-white/5 border border-white/10 text-sm"
@@ -273,7 +283,9 @@ export default function AgentSettings() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-3 md:items-start">
-          <div className="text-sm text-white/70 font-semibold">About Name</div>
+          <div className="text-sm text-white/70 font-semibold">
+            Your name &amp; bio
+          </div>
           <div className="md:col-span-2 space-y-2">
             <input
               className="w-full p-3 rounded bg-white/5 border border-white/10 text-sm"
@@ -300,15 +312,19 @@ export default function AgentSettings() {
       <section className="space-y-3 pt-2 border-t border-white/10">
         <div className="grid gap-4 md:grid-cols-3 md:items-center">
           <div className="text-sm text-white/70 font-semibold">
-            Hero YouTube URL
+            Intro video (YouTube link)
           </div>
-          <div className="md:col-span-2">
+          <div className="md:col-span-2 space-y-1">
             <input
               className="w-full p-3 rounded bg-white/5 border border-white/10 text-sm"
               placeholder="https://www.youtube.com/watch?v=..."
               value={heroYoutubeUrl}
               onChange={(e) => setHeroYoutubeUrl(e.target.value)}
             />
+            <p className="text-xs text-white/50">
+              If you don&apos;t add your own video, we&apos;ll show Logan&apos;s
+              default intro video here.
+            </p>
           </div>
         </div>
       </section>
