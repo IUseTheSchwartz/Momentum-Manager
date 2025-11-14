@@ -143,6 +143,104 @@ function CreatorBar({ settings }) {
   );
 }
 
+/* ---------------------- Email helpers (Logan-style) ---------------------- */
+
+function escapeHtml(str = "") {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function buildAgentLeadEmail({ site, lead, answers }) {
+  const agentName = site?.about_name || "Your Agent";
+  const siteName = site?.site_name || "Momentum Financial";
+  const leadName = lead.full_name || "Lead";
+
+  const safeAgent = escapeHtml(agentName);
+  const safeLead = escapeHtml(leadName);
+  const safeEmail = escapeHtml(lead.email || "");
+  const safePhone = escapeHtml(lead.phone || "");
+  const safeSlug = escapeHtml(site.slug || "");
+
+  const answersHtml = (answers || [])
+    .filter((a) => a.value && String(a.value).trim().length > 0)
+    .map(
+      (a) =>
+        `<li><strong>${escapeHtml(a.question)}</strong>: ${escapeHtml(
+          a.value
+        )}</li>`
+    )
+    .join("");
+
+  const answersText = (answers || [])
+    .filter((a) => a.value && String(a.value).trim().length > 0)
+    .map((a) => `- ${a.question}: ${a.value}`)
+    .join("\n");
+
+  const html = `
+  <h3 style="margin:0 0 8px;">New application for ${safeAgent}</h3>
+  <p style="margin:0 0 8px;color:#555;">Someone just applied on your Momentum recruiting site.</p>
+  <ul style="margin:0 0 12px 0;padding-left:18px;color:#111;">
+    <li><strong>Name:</strong> ${safeLead}</li>
+    <li><strong>Phone:</strong> ${safePhone}</li>
+    <li><strong>Email:</strong> ${safeEmail}</li>
+    <li><strong>Site:</strong> ${escapeHtml(siteName)} (slug: ${safeSlug})</li>
+  </ul>
+  ${
+    answersHtml
+      ? `<h4 style="margin:0 0 6px;">Application answers</h4>
+  <ul style="margin:0 0 12px 0;padding-left:18px;color:#111;">${answersHtml}</ul>`
+      : ""
+  }
+  <p style="margin-top:16px;color:#777;font-size:13px;">
+    Log into your Momentum Manager account and open the <strong>Leads</strong> tab on your site to follow up.
+  </p>`;
+
+  const text = `New application for ${agentName}
+
+Name: ${leadName}
+Phone: ${lead.phone || ""}
+Email: ${lead.email || ""}
+Site: ${siteName} (slug: ${site.slug || ""})
+
+${
+  answersText
+    ? `Application answers:\n${answersText}\n\n`
+    : ""
+}Log into Momentum Manager and open the Leads tab on your site to follow up.`;
+
+  const subject = `New application – ${leadName}`;
+
+  return { subject, html, text };
+}
+
+async function sendLeadNotification({ site, lead, answers }) {
+  const to = (site.notification_emails || "").trim();
+  if (!to) {
+    // no per-agent emails set; function will fall back to SMTP_TO only if we omit `to`,
+    // but here we want "per agent or nothing", so just bail.
+    return;
+  }
+
+  const { subject, html, text } = buildAgentLeadEmail({ site, lead, answers });
+
+  try {
+    const res = await fetch("/.netlify/functions/send-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to, subject, html, text }),
+    });
+    if (!res.ok) {
+      const t = await res.text().catch(() => "");
+      console.error("[AgentPublicLanding] send-email failed:", res.status, t);
+    }
+  } catch (err) {
+    console.error("[AgentPublicLanding] send-email error:", err);
+  }
+}
+
 /* ---------------------- Main page ---------------------- */
 
 export default function AgentPublicLanding() {
@@ -314,7 +412,7 @@ export default function AgentPublicLanding() {
     }
   }
 
-  /* ---------------------- QUALIFY → update mm_agent_leads ---------------------- */
+  /* ---------------------- QUALIFY → update mm_agent_leads + email ---------------------- */
 
   async function handleQualifySubmit(values) {
     if (!leadId || !site) {
@@ -331,12 +429,16 @@ export default function AgentPublicLanding() {
         value: values[q.id] || "",
       }));
 
+      const leadPayload = {
+        full_name: leadDraft?.full_name || fullName?.trim() || null,
+        email: leadDraft?.email || email?.trim() || null,
+        phone: leadDraft?.phone || phone?.trim() || null,
+      };
+
       const { error } = await supabase
         .from("mm_agent_leads")
         .update({
-          full_name: leadDraft?.full_name || fullName?.trim() || null,
-          email: leadDraft?.email || email?.trim() || null,
-          phone: leadDraft?.phone || phone?.trim() || null,
+          ...leadPayload,
           answers,
           is_complete: true,
           last_activity_at: nowIso,
@@ -344,6 +446,17 @@ export default function AgentPublicLanding() {
         .eq("id", leadId);
 
       if (error) throw error;
+
+      // 🔔 Fire per-agent notification email (doesn't block UI if it fails)
+      await sendLeadNotification({
+        site,
+        lead: {
+          full_name: leadPayload.full_name || "",
+          email: leadPayload.email || "",
+          phone: leadPayload.phone || "",
+        },
+        answers,
+      });
 
       setStep("done");
     } catch (e) {
@@ -384,7 +497,7 @@ export default function AgentPublicLanding() {
           )}
           <span className="text-white/60 text-sm">
             {loading ? (
-              <span className="inline-block h-4 w-32 animate-pulse bg.white/10 rounded" />
+              <span className="inline-block h-4 w-32 animate-pulse bg-white/10 rounded" />
             ) : (
               <>
                 {pageOwner} | {siteName}
@@ -644,7 +757,7 @@ export default function AgentPublicLanding() {
                   <button
                     type="button"
                     onClick={closeModal}
-                    className="px-4 py-2 rounded-lg text-xs font-semibold bg.white text-black hover:bg-white/90"
+                    className="px-4 py-2 rounded-lg text-xs font-semibold bg-white text-black hover:bg-white/90"
                   >
                     Close
                   </button>
