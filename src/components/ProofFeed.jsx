@@ -25,7 +25,13 @@ function formatDate(iso) {
 }
 
 /**
- * Discord-style proof carousel
+ * Discord-style proof carousel (Logan vibe)
+ *
+ * Props:
+ *  - items:        array of proof posts
+ *  - visibleCount: cards per "page"
+ *  - cycleMs:      time between page slides
+ *  - blurTransition, bigSlides: cosmetic flags kept for API compatibility
  */
 export default function ProofFeed({
   items = [],
@@ -34,54 +40,77 @@ export default function ProofFeed({
   blurTransition = false,
   bigSlides = false,
 }) {
-  const total = items.length;
-  const [index, setIndex] = useState(0);
+  // Chunk items into "pages"
+  const pages = useMemo(() => {
+    if (!items.length) return [];
+    const arr = [];
+    for (let i = 0; i < items.length; i += visibleCount) {
+      arr.push(items.slice(i, i + visibleCount));
+    }
+    return arr;
+  }, [items, visibleCount]);
 
+  const [pageIndex, setPageIndex] = useState(0);
+
+  // Reset page when items change
   useEffect(() => {
-    if (total <= visibleCount) return;
+    setPageIndex(0);
+  }, [items.length, visibleCount]);
+
+  // Auto-slide between pages
+  useEffect(() => {
+    if (pages.length <= 1) return;
     const id = setInterval(
-      () => setIndex((prev) => (prev + 1) % total),
+      () => setPageIndex((prev) => (prev + 1) % pages.length),
       cycleMs
     );
     return () => clearInterval(id);
-  }, [total, visibleCount, cycleMs]);
+  }, [pages.length, cycleMs]);
 
-  const visibleItems = useMemo(() => {
-    if (!total) return [];
-    if (total <= visibleCount) return items;
-    const out = [];
-    for (let i = 0; i < visibleCount; i += 1) {
-      out.push(items[(index + i) % total]);
-    }
-    return out;
-  }, [items, index, total, visibleCount]);
+  if (!pages.length) return null;
 
-  // If no items, render nothing (no "Recent wins" text)
-  if (!total) return null;
+  const clampedIndex =
+    pageIndex >= pages.length ? pages.length - 1 : pageIndex;
 
   return (
     <div className="w-full">
-      <div
-        className={`grid gap-3 ${
-          bigSlides
-            ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
-            : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
-        }`}
-      >
-        {visibleItems.map((item) => (
-          <ProofCard key={item.id} item={item} blur={blurTransition} />
-        ))}
+      {/* Slider */}
+      <div className="relative overflow-hidden">
+        <div
+          className="flex transition-transform duration-500 ease-out"
+          style={{ transform: `translateX(-${clampedIndex * 100}%)` }}
+        >
+          {pages.map((pageItems, idx) => (
+            <div
+              key={idx}
+              className={`min-w-full grid gap-3 ${
+                bigSlides
+                  ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
+                  : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+              }`}
+            >
+              {pageItems.map((item) => (
+                <ProofCard
+                  key={item.id}
+                  item={item}
+                  blur={blurTransition}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
 
-      {total > visibleCount && (
+      {/* Dots under slider (Discord-style) */}
+      {pages.length > 1 && (
         <div className="mt-3 flex justify-center gap-1">
-          {Array.from({ length: Math.min(total, 10) }).map((_, i) => (
-            <div
+          {pages.map((_, i) => (
+            <button
               key={i}
-              className={`h-1 w-4 rounded-full ${
-                i === index % Math.min(total, 10)
-                  ? "bg-white/80"
-                  : "bg-white/25"
+              type="button"
+              onClick={() => setPageIndex(i)}
+              className={`h-1 w-4 rounded-full transition-colors ${
+                i === clampedIndex ? "bg-white/80" : "bg-white/25"
               }`}
             />
           ))}
@@ -108,20 +137,21 @@ function ProofCard({ item, blur }) {
     <article
       className={[
         "rounded-2xl border border-white/12",
-        "bg-[#111214] px-4 py-3",
+        "bg-[#2b2d31] px-4 py-3", // Discord grey
         "flex flex-col justify-between",
-        "shadow-[0_0_0_1px_rgba(255,255,255,0.03)]",
+        "shadow-[0_0_0_1px_rgba(0,0,0,0.4)]",
         blur ? "backdrop-blur-sm" : "",
       ]
         .filter(Boolean)
         .join(" ")}
     >
+      {/* top row: avatar, name, date */}
       <div className="flex items-center gap-3 mb-2">
         {avatar_url ? (
           <img
             src={avatar_url}
             alt={display_name || ""}
-            className="h-9 w-9 rounded-full object-cover border border-white/20"
+            className="h-9 w-9 rounded-full object-cover border border-black/40"
           />
         ) : (
           <div className="h-9 w-9 rounded-full bg-white/10" />
@@ -140,12 +170,14 @@ function ProofCard({ item, blur }) {
         )}
       </div>
 
+      {/* amount (big, green like Logan) */}
       {amountStr && (
         <div className="text-sm font-semibold text-emerald-300 leading-tight">
           {amountStr}
         </div>
       )}
 
+      {/* message text (product / details) */}
       {message_text && (
         <p className="mt-1 text-[11px] text-white/80 leading-snug line-clamp-3">
           {message_text}
