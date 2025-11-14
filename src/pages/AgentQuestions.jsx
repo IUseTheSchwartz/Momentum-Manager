@@ -2,7 +2,51 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient.js";
 
-const INPUT_TYPES = ["text", "textarea", "email", "phone", "number", "select"];
+const INPUT_TYPES = ["text", "textarea", "email", "phone", "number", "select", "radio"];
+
+const DEFAULT_QUESTIONS = [
+  {
+    question_text: "Are you 18 or older?",
+    input_type: "radio",
+    input_options: ["Yes", "No"],
+    placeholder: "",
+    help_text: "",
+    is_required: true,
+    is_active: true,
+    sort_order: 1,
+  },
+  {
+    question_text:
+      "Are you prepared to work 12–14 hours/day for the first 60 days?",
+    input_type: "radio",
+    input_options: ["Yes", "No"],
+    placeholder: "",
+    help_text: "",
+    is_required: true,
+    is_active: true,
+    sort_order: 2,
+  },
+  {
+    question_text: "How soon can you start?",
+    input_type: "select",
+    input_options: ["Immediately", "1–2 weeks", "3–4 weeks"],
+    placeholder: "",
+    help_text: "",
+    is_required: true,
+    is_active: true,
+    sort_order: 3,
+  },
+  {
+    question_text: "What makes you coachable? (be specific)",
+    input_type: "textarea",
+    input_options: [],
+    placeholder: "",
+    help_text: "",
+    is_required: true,
+    is_active: true,
+    sort_order: 4,
+  },
+];
 
 function EmptyState() {
   return (
@@ -76,8 +120,40 @@ export default function AgentQuestions() {
         return;
       }
 
-      setQuestions(qs || []);
-      setLoading(false);
+      // If no questions yet, seed with Logan-style defaults
+      if (!qs || qs.length === 0) {
+        try {
+          const defaults = DEFAULT_QUESTIONS.map((q) => ({
+            ...q,
+            agent_site_id: site.id,
+          }));
+
+          const { data: inserted, error: insErr } = await supabase
+            .from("mm_agent_questions")
+            .insert(defaults)
+            .select("*")
+            .order("sort_order", { ascending: true });
+
+          if (insErr) {
+            console.error(insErr);
+            setError("Failed to create default questions.");
+            setLoading(false);
+            return;
+          }
+
+          if (cancelled) return;
+          setQuestions(inserted || []);
+        } catch (e) {
+          console.error(e);
+          setError("Failed to create default questions.");
+          setQuestions([]);
+        } finally {
+          setLoading(false);
+        }
+      } else {
+        setQuestions(qs || []);
+        setLoading(false);
+      }
     }
 
     load();
@@ -189,7 +265,7 @@ export default function AgentQuestions() {
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold">Application questions</h2>
-          <p className="text-xs text-white/60">
+          <p className="text-xs text.white/60">
             These will show after someone enters their contact info on your
             public page.
           </p>
@@ -332,9 +408,7 @@ export default function AgentQuestions() {
             Questions saved to Supabase.
           </span>
         )}
-        {error && (
-          <span className="text-xs text-red-400">{error}</span>
-        )}
+        {error && <span className="text-xs text-red-400">{error}</span>}
       </div>
     </div>
   );
