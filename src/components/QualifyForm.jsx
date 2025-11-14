@@ -1,5 +1,5 @@
 // File: src/components/QualifyForm.jsx
-import React, { useState } from "react";
+import { useState } from "react";
 
 /**
  * QualifyForm
@@ -22,7 +22,6 @@ export default function QualifyForm({ questions = [], onSubmit, submitting }) {
     onSubmit(values);
   }
 
-  // normalize options if select/radio in the future
   function getOptions(q) {
     if (!q) return [];
     if (Array.isArray(q.input_options)) return q.input_options;
@@ -79,7 +78,9 @@ export default function QualifyForm({ questions = [], onSubmit, submitting }) {
               </select>
             ) : (
               <input
-                type={type === "phone" ? "tel" : type === "email" ? "email" : "text"}
+                type={
+                  type === "phone" ? "tel" : type === "email" ? "email" : "text"
+                }
                 className="w-full rounded-lg bg-black/30 border border-white/10 px-3 py-2 text-sm outline-none"
                 placeholder={q.placeholder || ""}
                 value={values[q.id] || ""}
@@ -93,7 +94,7 @@ export default function QualifyForm({ questions = [], onSubmit, submitting }) {
             )}
           </div>
         );
-      )}
+      })}
 
       <div className="mt-2 flex justify-end gap-2">
         <button
