@@ -128,7 +128,7 @@ function CreatorBar({ settings }) {
                   href={href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-sm text-white/90 hover:bg-white/15 transition"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-sm text-white/90 hover:bg.white/15 transition"
                   aria-label={label}
                 >
                   <Icon />
@@ -141,103 +141,6 @@ function CreatorBar({ settings }) {
       </div>
     </section>
   );
-}
-
-/* ---------------------- Email helpers (per-agent notification) ---------------------- */
-
-function escapeHtml(str = "") {
-  return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function buildAgentLeadEmail({ site, lead, answers }) {
-  const agentName = site?.about_name || "Your Agent";
-  const siteName = site?.site_name || "Momentum Financial";
-  const leadName = lead.full_name || "Lead";
-
-  const safeAgent = escapeHtml(agentName);
-  const safeLead = escapeHtml(leadName);
-  const safeEmail = escapeHtml(lead.email || "");
-  const safePhone = escapeHtml(lead.phone || "");
-  const safeSlug = escapeHtml(site.slug || "");
-
-  const answersHtml = (answers || [])
-    .filter((a) => a.value && String(a.value).trim().length > 0)
-    .map(
-      (a) =>
-        `<li><strong>${escapeHtml(a.question)}</strong>: ${escapeHtml(
-          a.value
-        )}</li>`
-    )
-    .join("");
-
-  const answersText = (answers || [])
-    .filter((a) => a.value && String(a.value).trim().length > 0)
-    .map((a) => `- ${a.question}: ${a.value}`)
-    .join("\n");
-
-  const html = `
-  <h3 style="margin:0 0 8px;">New application for ${safeAgent}</h3>
-  <p style="margin:0 0 8px;color:#555;">Someone just applied on your Momentum recruiting site.</p>
-  <ul style="margin:0 0 12px 0;padding-left:18px;color:#111;">
-    <li><strong>Name:</strong> ${safeLead}</li>
-    <li><strong>Phone:</strong> ${safePhone}</li>
-    <li><strong>Email:</strong> ${safeEmail}</li>
-    <li><strong>Site:</strong> ${escapeHtml(siteName)} (slug: ${safeSlug})</li>
-  </ul>
-  ${
-    answersHtml
-      ? `<h4 style="margin:0 0 6px;">Application answers</h4>
-  <ul style="margin:0 0 12px 0;padding-left:18px;color:#111;">${answersHtml}</ul>`
-      : ""
-  }
-  <p style="margin-top:16px;color:#777;font-size:13px;">
-    Log into your Momentum Manager account and open the <strong>Leads</strong> tab on your site to follow up.
-  </p>`;
-
-  const text = `New application for ${agentName}
-
-Name: ${leadName}
-Phone: ${lead.phone || ""}
-Email: ${lead.email || ""}
-Site: ${siteName} (slug: ${site.slug || ""})
-
-${
-  answersText
-    ? `Application answers:\n${answersText}\n\n`
-    : ""
-}Log into Momentum Manager and open the Leads tab on your site to follow up.`;
-
-  const subject = `New application – ${leadName}`;
-
-  return { subject, html, text };
-}
-
-async function sendLeadNotification({ site, lead, answers }) {
-  const to = (site.notification_emails || "").trim();
-  if (!to) {
-    // No per-agent emails set => silently skip
-    return;
-  }
-
-  const { subject, html, text } = buildAgentLeadEmail({ site, lead, answers });
-
-  try {
-    const res = await fetch("/.netlify/functions/send-email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to, subject, html, text }),
-    });
-    if (!res.ok) {
-      const t = await res.text().catch(() => "");
-      console.error("[AgentPublicLanding] send-email failed:", res.status, t);
-    }
-  } catch (err) {
-    console.error("[AgentPublicLanding] send-email error:", err);
-  }
 }
 
 /* ---------------------- Main page ---------------------- */
@@ -388,7 +291,7 @@ export default function AgentPublicLanding() {
           phone: ph || null,
           utm,
           is_complete: false,
-          stage: "new",
+          stage: "contact", // ⬅️ contact info collected
           started_at: nowIso,
           last_activity_at: nowIso,
         })
@@ -412,7 +315,7 @@ export default function AgentPublicLanding() {
     }
   }
 
-  /* ---------------------- QUALIFY → update mm_agent_leads + email + redirect ---------------------- */
+  /* ---------------------- QUALIFY → update mm_agent_leads + go to /schedule ---------------------- */
 
   async function handleQualifySubmit(values) {
     if (!leadId || !site) {
@@ -441,24 +344,14 @@ export default function AgentPublicLanding() {
           ...leadPayload,
           answers,
           is_complete: true,
+          stage: "questions", // ⬅️ questions done, waiting on booking / thank-you
           last_activity_at: nowIso,
         })
         .eq("id", leadId);
 
       if (error) throw error;
 
-      // 🔔 per-agent notification email
-      await sendLeadNotification({
-        site,
-        lead: {
-          full_name: leadPayload.full_name || "",
-          email: leadPayload.email || "",
-          phone: leadPayload.phone || "",
-        },
-        answers,
-      });
-
-      // ➡️ redirect to booking shell (then Thank You)
+      // ➡️ redirect to booking page
       navigate(`/schedule?lead_id=${leadId}`);
     } catch (e) {
       console.error(e);
@@ -551,7 +444,7 @@ export default function AgentPublicLanding() {
             ) : (
               <button
                 onClick={openModal}
-                className="inline-flex w-full sm:w-auto items-center justify-center rounded-xl bg-white px-6 py-3 font-semibold text-black shadow hover:shadow-lg active:scale-[.99]"
+                className="inline-flex w-full sm:w-auto items-center justify-center rounded-xl bg-white px-6 py-3 font-semibold text.black shadow hover:shadow-lg active:scale-[.99]"
               >
                 Book Call
               </button>
@@ -607,7 +500,7 @@ export default function AgentPublicLanding() {
                 </div>
               </div>
             ) : proof.length ? (
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+              <div className="rounded-2xl border border-white/10 bg.white/[0.03] p-3">
                 <ProofFeed
                   items={proof}
                   visibleCount={4}
