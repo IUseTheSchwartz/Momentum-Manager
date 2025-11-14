@@ -1,15 +1,23 @@
+// File: src/pages/MyLandingPage.jsx
 import { useState } from "react";
+
+function slugFromName(name) {
+  const trimmed = (name || "").trim().toLowerCase();
+  if (!trimmed) return "first-lastname";
+  // keep letters/numbers/spaces, then turn spaces into hyphens
+  return trimmed
+    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/\s+/g, "-");
+}
 
 export default function MyLandingPage() {
   const [headshotFile, setHeadshotFile] = useState(null);
   const [notificationEmails, setNotificationEmails] = useState("");
-  const [siteName, setSiteName] = useState("");
   const [heroTitle, setHeroTitle] = useState("");
   const [heroSub, setHeroSub] = useState("");
   const [aboutName, setAboutName] = useState("");
   const [aboutBio, setAboutBio] = useState("");
   const [heroYoutubeUrl, setHeroYoutubeUrl] = useState("");
-  const [heroYoutubeFallback, setHeroYoutubeFallback] = useState("");
   const [socialYoutube, setSocialYoutube] = useState("");
   const [socialInstagram, setSocialInstagram] = useState("");
   const [socialSnapchat, setSocialSnapchat] = useState("");
@@ -31,6 +39,10 @@ export default function MyLandingPage() {
       setTimeout(() => setSaved(false), 2000);
     }, 600);
   }
+
+  const slug = slugFromName(aboutName);
+  const siteUrl = `https://momentummanager.net/${slug}`;
+  const previewSiteName = `${aboutName || "Your Name"} | Momentum Financial`;
 
   return (
     <div className="max-w-3xl mx-auto mt-10 card p-6 space-y-6">
@@ -92,20 +104,6 @@ export default function MyLandingPage() {
         <section className="space-y-3 pt-2 border-t border-white/10">
           <div className="grid gap-4 md:grid-cols-3 md:items-center">
             <div className="text-sm text-white/70 font-semibold">
-              Site Name
-            </div>
-            <div className="md:col-span-2">
-              <input
-                className="w-full p-3 rounded bg-white/5 border border-white/10 text-sm"
-                placeholder="Your Name | Momentum Financial"
-                value={siteName}
-                onChange={(e) => setSiteName(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-3 md:items-center">
-            <div className="text-sm text-white/70 font-semibold">
               Hero Title
             </div>
             <div className="md:col-span-2">
@@ -143,6 +141,11 @@ export default function MyLandingPage() {
                 value={aboutName}
                 onChange={(e) => setAboutName(e.target.value)}
               />
+              <p className="text-xs text-white/50">
+                Your site will display as{" "}
+                <span className="font-semibold">{previewSiteName}</span> in the
+                browser title.
+              </p>
               <textarea
                 className="w-full p-3 rounded bg-white/5 border border-white/10 text-sm min-h-[120px]"
                 placeholder="Short bio about you, what you produce, how you work with agents, what they can expect from your team..."
@@ -153,7 +156,7 @@ export default function MyLandingPage() {
           </div>
         </section>
 
-        {/* Video URLs */}
+        {/* Video URL */}
         <section className="space-y-3 pt-2 border-t border-white/10">
           <div className="grid gap-4 md:grid-cols-3 md:items-center">
             <div className="text-sm text-white/70 font-semibold">
@@ -165,20 +168,6 @@ export default function MyLandingPage() {
                 placeholder="https://www.youtube.com/watch?v=..."
                 value={heroYoutubeUrl}
                 onChange={(e) => setHeroYoutubeUrl(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-3 md:items-center">
-            <div className="text-sm text-white/70 font-semibold">
-              YouTube URL (fallback)
-            </div>
-            <div className="md:col-span-2">
-              <input
-                className="w-full p-3 rounded bg-white/5 border border-white/10 text-sm"
-                placeholder="Used if the main video can&apos;t load"
-                value={heroYoutubeFallback}
-                onChange={(e) => setHeroYoutubeFallback(e.target.value)}
               />
             </div>
           </div>
@@ -214,6 +203,20 @@ export default function MyLandingPage() {
           <p className="text-xs text-white/50">
             Paste full links only. These will power the icon buttons on your
             public landing page.
+          </p>
+        </section>
+
+        {/* Site URL preview */}
+        <section className="space-y-2 pt-2 border-t border-white/10">
+          <h2 className="text-sm font-semibold text-white/80">Your site URL</h2>
+          <input
+            className="w-full p-3 rounded bg-white/5 border border-white/10 text-sm"
+            readOnly
+            value={siteUrl}
+          />
+          <p className="text-xs text-white/50">
+            This is where your public page will live. It&apos;s generated from
+            your name as <code>first-lastname</code>.
           </p>
         </section>
 
