@@ -1,4 +1,3 @@
-// File: src/App.jsx
 import { Routes, Route, Navigate } from "react-router-dom";
 
 // Public pages
@@ -7,6 +6,8 @@ import Login from "./pages/Login.jsx";
 import Signup from "./pages/Signup.jsx";
 import MomentumLeadManager from "./pages/MomentumLeadManager.jsx";
 import GetMyLandingPage from "./pages/GetMyLandingPage.jsx";
+import AgentLogin from "./pages/AgentLogin.jsx";       // 👈 NEW
+import MyLandingPage from "./pages/MyLandingPage.jsx"; // 👈 NEW
 
 // Auth'd pages
 import Leads from "./pages/Leads.jsx";
@@ -35,6 +36,7 @@ export default function App() {
           {/* Public */}
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/login-agent" element={<AgentLogin />} /> {/* NEW */}
           <Route path="/signup" element={<Signup />} />
           <Route
             path="/momentum-lead-manager"
@@ -51,6 +53,7 @@ export default function App() {
           {/* Auth required */}
           <Route element={<ProtectedRoute />}>
             <Route path="/leads" element={<Leads />} />
+            <Route path="/my-landing-page" element={<MyLandingPage />} /> {/* NEW */}
 
             {/* Manager-only */}
             <Route element={<RoleGate role="manager" />}>
