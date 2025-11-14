@@ -1,6 +1,6 @@
 // File: src/pages/AgentPublicLanding.jsx
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient.js";
 import { readUTM } from "../lib/utm.js";
 import ProofFeed from "../components/ProofFeed.jsx";
@@ -143,7 +143,7 @@ function CreatorBar({ settings }) {
   );
 }
 
-/* ---------------------- Email helpers (Logan-style) ---------------------- */
+/* ---------------------- Email helpers (per-agent notification) ---------------------- */
 
 function escapeHtml(str = "") {
   return String(str)
@@ -219,21 +219,17 @@ ${
 async function sendLeadNotification({ site, lead, answers }) {
   const to = (site.notification_emails || "").trim();
   if (!to) {
-    // no per-agent emails set; function will fall back to SMTP_TO only if we omit `to`,
-    // but here we want "per agent or nothing", so just bail.
+    // No per-agent emails set => silently skip
     return;
   }
 
   const { subject, html, text } = buildAgentLeadEmail({ site, lead, answers });
 
-  // 🔹 Use "Agent Name | Momentum Financial" as the FROM display name
-  const fromName = `${site?.about_name || "Your Agent"} | Momentum Financial`;
-
   try {
     const res = await fetch("/.netlify/functions/send-email", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to, subject, html, text, fromName }),
+      body: JSON.stringify({ to, subject, html, text }),
     });
     if (!res.ok) {
       const t = await res.text().catch(() => "");
@@ -248,6 +244,7 @@ async function sendLeadNotification({ site, lead, answers }) {
 
 export default function AgentPublicLanding() {
   const { slug } = useParams();
+  const navigate = useNavigate();
 
   const [site, setSite] = useState(null);
   const [questions, setQuestions] = useState([]);
@@ -415,7 +412,7 @@ export default function AgentPublicLanding() {
     }
   }
 
-  /* ---------------------- QUALIFY → update mm_agent_leads + email ---------------------- */
+  /* ---------------------- QUALIFY → update mm_agent_leads + email + redirect ---------------------- */
 
   async function handleQualifySubmit(values) {
     if (!leadId || !site) {
@@ -450,7 +447,7 @@ export default function AgentPublicLanding() {
 
       if (error) throw error;
 
-      // 🔔 Fire per-agent notification email (doesn't block UI if it fails)
+      // 🔔 per-agent notification email
       await sendLeadNotification({
         site,
         lead: {
@@ -461,7 +458,8 @@ export default function AgentPublicLanding() {
         answers,
       });
 
-      setStep("done");
+      // ➡️ redirect to booking shell (then Thank You)
+      navigate(`/schedule?lead_id=${leadId}`);
     } catch (e) {
       console.error(e);
       alert("Submission failed. Please try again.");
@@ -601,7 +599,7 @@ export default function AgentPublicLanding() {
           {/* PROOF */}
           <div className="mt-6">
             {loading ? (
-              <div className="rounded-2xl border border-white/10 bg.white/[0.03] p-3">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {Array.from({ length: 4 }).map((_, i) => (
                     <Skeleton key={i} className="h-28 w-full rounded-xl" />
@@ -748,7 +746,7 @@ export default function AgentPublicLanding() {
               </div>
             )}
 
-            {/* STEP: DONE */}
+            {/* STEP: DONE (fallback only) */}
             {step === "done" && (
               <div className="space-y-3 text-sm text-white/80">
                 <p>
