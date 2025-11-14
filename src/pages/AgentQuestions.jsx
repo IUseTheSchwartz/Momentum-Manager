@@ -1,20 +1,12 @@
 // File: src/pages/AgentQuestions.jsx
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient.js";
-import { useAuth } from "../auth.jsx";
 
-const INPUT_TYPES = [
-  "text",
-  "textarea",
-  "email",
-  "phone",
-  "number",
-  "select",
-];
+const INPUT_TYPES = ["text", "textarea", "email", "phone", "number", "select"];
 
 function EmptyState() {
   return (
-    <div className="rounded-xl border border-dashed border-white/15 bg-white/5/5 p-4 text-sm text-white/60">
+    <div className="rounded-xl border border-dashed border-white/15 bg-white/[0.02] p-4 text-sm text-white/60">
       You don&apos;t have any questions yet. Use &quot;Add question&quot; to
       create your first one. These will power the application step of your
       public recruiting site.
@@ -23,7 +15,6 @@ function EmptyState() {
 }
 
 export default function AgentQuestions() {
-  const { user } = useAuth();
   const [agentSite, setAgentSite] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -32,11 +23,25 @@ export default function AgentQuestions() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    if (!user) return;
+    let cancelled = false;
 
     async function load() {
       setLoading(true);
       setError(null);
+
+      const {
+        data: { user },
+        error: userErr,
+      } = await supabase.auth.getUser();
+
+      if (cancelled) return;
+
+      if (userErr || !user) {
+        console.error(userErr);
+        setError("You must be logged in to manage questions.");
+        setLoading(false);
+        return;
+      }
 
       // find agent site
       const { data: site, error: siteErr } = await supabase
@@ -44,6 +49,8 @@ export default function AgentQuestions() {
         .select("id")
         .eq("agent_user_id", user.id)
         .maybeSingle();
+
+      if (cancelled) return;
 
       if (siteErr || !site) {
         console.error(siteErr);
@@ -60,9 +67,11 @@ export default function AgentQuestions() {
         .eq("agent_site_id", site.id)
         .order("sort_order", { ascending: true });
 
+      if (cancelled) return;
+
       if (qErr) {
         console.error(qErr);
-        setError("Failed to load questions");
+        setError("Failed to load questions.");
         setLoading(false);
         return;
       }
@@ -72,7 +81,11 @@ export default function AgentQuestions() {
     }
 
     load();
-  }, [user]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function addQuestion() {
     const maxSort =
@@ -152,7 +165,7 @@ export default function AgentQuestions() {
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
       console.error(err);
-      setError("Failed to save questions");
+      setError("Failed to save questions.");
     } finally {
       setSaving(false);
     }
