@@ -16,7 +16,8 @@ export default function GetMyLandingPage() {
             landing page. Log in with your agent account to continue.
           </p>
           <div className="flex gap-3 justify-center">
-            <Link className="btn btn-primary" to="/login">
+            {/* Use the new agent-specific login */}
+            <Link className="btn btn-primary" to="/login-agent">
               Login
             </Link>
             <Link className="btn" to="/signup">
