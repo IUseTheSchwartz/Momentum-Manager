@@ -11,6 +11,7 @@ export default function Nav() {
   const HIDE_LINKS_PATHS = new Set([
     "/",
     "/login",
+    "/login-agent",      // 👈 new agent-login page
     "/signup",
     "/momentum-lead-manager",
     "/get-my-landing-page",
