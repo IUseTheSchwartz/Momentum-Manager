@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient.js";
 import { readUTM } from "../lib/utm.js";
+import ProofFeed from "../components/ProofFeed.jsx";
+import QualifyForm from "../components/QualifyForm.jsx";
 
 /* --------------------------- helpers --------------------------- */
 
@@ -21,26 +23,73 @@ function extractYouTubeId(url = "") {
   }
 }
 
+/* tiny skeleton blocks to avoid ugly flashes */
 function Skeleton({ className = "" }) {
-  return (
-    <div className={`animate-pulse rounded-md bg-white/10 ${className}`} />
-  );
+  return <div className={`animate-pulse rounded-md bg-white/10 ${className}`} />;
 }
 
-/* ---------------------- Creator bar ---------------------- */
+/* ---------------------- Creator Bar (Logan-style) ---------------------- */
 
 function CreatorBar({ settings }) {
-  const name = settings?.about_name || "Your Name";
+  const name   = settings?.about_name || "Your Name";
   const avatar = settings?.headshot_url || null;
 
-  const ytUrl = settings?.social_youtube_url || "";
-  const igUrl = settings?.social_instagram_url || "";
-  const scUrl = settings?.social_snapchat_url || "";
+  const ytUrl  = settings?.social_youtube_url || "";
+  const igUrl  = settings?.social_instagram_url || "";
+  const scUrl  = settings?.social_snapchat_url || "";
 
   const items = [
-    ytUrl && { key: "yt", label: "YouTube", href: ytUrl },
-    igUrl && { key: "ig", label: "Instagram", href: igUrl },
-    scUrl && { key: "sc", label: "Snapchat", href: scUrl },
+    ytUrl && {
+      key: "yt",
+      label: "YouTube",
+      href: ytUrl,
+      Icon: (props) => (
+        <svg
+          viewBox="0 0 24 24"
+          className="h-4 w-4"
+          aria-hidden="true"
+          fill="currentColor"
+          {...props}
+        >
+          <path d="M23.5 6.2a4 4 0 0 0-2.8-2.9C18.8 2.8 12 2.8 12 2.8s-6.8 0-8.7.5A4 4 0 0 0 .5 6.2 41.7 41.7 0 0 0 0 12a41.7 41.7 0 0 0 .5 5.8 4 4 0 0 0 2.8 2.9c1.9.5 8.7.5 8.7.5s6.8 0 8.7-.5a4 4 0 0 0 2.8-2.9c.4-1.9.5-5.8.5-5.8s0-3.9-.5-5.8ZM9.6 15.5v-7l6.6 3.5-6.6 3.5Z" />
+        </svg>
+      ),
+    },
+    igUrl && {
+      key: "ig",
+      label: "Instagram",
+      href: igUrl,
+      Icon: (props) => (
+        <svg
+          viewBox="0 0 24 24"
+          className="h-4 w-4"
+          aria-hidden="true"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          {...props}
+        >
+          <rect x="2.5" y="2.5" width="19" height="19" rx="5" />
+          <circle cx="12" cy="12" r="4" />
+          <circle cx="17.5" cy="6.5" r="1.2" fill="currentColor" stroke="none" />
+        </svg>
+      ),
+    },
+    scUrl && {
+      key: "sc",
+      label: "Snapchat",
+      href: scUrl,
+      Icon: () => (
+        <img
+          src="https://cdn.simpleicons.org/snapchat/FFFFFF"
+          alt=""
+          className="h-4 w-4 object-contain"
+          loading="lazy"
+        />
+      ),
+    },
   ].filter(Boolean);
 
   if (!items.length) return null;
@@ -72,18 +121,20 @@ function CreatorBar({ settings }) {
             </div>
           </div>
 
-          {/* socials */}
+          {/* socials — same button style as Logan */}
           <div className="sm:ml-auto">
             <div className="grid grid-cols-2 gap-2 max-[380px]:grid-cols-1 sm:flex sm:flex-row sm:items-center">
-              {items.map(({ key, label, href }) => (
+              {items.map(({ key, label, href, Icon }) => (
                 <a
                   key={key}
                   href={href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm text-white/90 hover:bg-white/15 transition"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-sm text-white/90 hover:bg-white/15 transition"
+                  aria-label={label}
                 >
-                  <span className="truncate">{label}</span>
+                  <Icon />
+                  <span className="font-medium">{label}</span>
                 </a>
               ))}
             </div>
@@ -94,81 +145,37 @@ function CreatorBar({ settings }) {
   );
 }
 
-/* ---------------------- Proof section ---------------------- */
-
-function ProofSection({ items }) {
-  const cards = useMemo(() => items || [], [items]);
-
-  if (!cards.length) return null;
-
-  return (
-    <section className="mt-10">
-      <div className="flex items-baseline justify-between mb-4">
-        <h2 className="text-lg font-semibold">Recent wins</h2>
-        <p className="text-xs text-white/50">
-          Live examples from the Momentum Financial team.
-        </p>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        {cards.map((p) => (
-          <article
-            key={p.id}
-            className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 flex flex-col gap-2"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-sm font-semibold truncate">
-                  {p.display_name || "Momentum Agent"}
-                </div>
-                <div className="text-[11px] text-white/50">
-                  {p.happened_at
-                    ? new Date(p.happened_at).toLocaleDateString()
-                    : ""}
-                </div>
-              </div>
-              {p.amount_cents != null && (
-                <div className="text-xs font-semibold px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
-                  {p.currency === "usd" ? "$" : ""}
-                  {(p.amount_cents / 100).toLocaleString()}
-                </div>
-              )}
-            </div>
-            <p className="text-sm text-white/80">{p.message_text}</p>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-/* ---------------------- Main page ---------------------- */
+/* ---------------------- Main page (Logan-style layout) ---------------------- */
 
 export default function AgentPublicLanding() {
   const { slug } = useParams();
 
   const [site, setSite] = useState(null);
   const [questions, setQuestions] = useState([]);
-  const [proofItems, setProofItems] = useState([]);
+  const [proof, setProof] = useState([]);
   const [loading, setLoading] = useState(true);
   const [proofLoading, setProofLoading] = useState(true);
   const [err, setErr] = useState(null);
 
-  const [modalOpen, setModalOpen] = useState(false);
+  // modal / booking
+  const [open, setOpen] = useState(false);
   const [step, setStep] = useState("contact");
-  const [leadId, setLeadId] = useState(null);
 
-  // contact
+  // lead state
+  const [leadId, setLeadId] = useState(null);
+  const [leadDraft, setLeadDraft] = useState(null);
+
+  // contact fields
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
 
-  // qualify answers
-  const [answers, setAnswers] = useState({});
   const [submitting, setSubmitting] = useState(false);
 
+  /* ---------------------- Load site + questions ---------------------- */
+
   useEffect(() => {
-    async function loadSiteAndQuestions() {
+    async function load() {
       setLoading(true);
       setErr(null);
 
@@ -203,8 +210,10 @@ export default function AgentPublicLanding() {
       setLoading(false);
     }
 
-    loadSiteAndQuestions();
+    load();
   }, [slug]);
+
+  /* ---------------------- Load proof from Logan function ---------------------- */
 
   useEffect(() => {
     async function loadProof() {
@@ -213,15 +222,18 @@ export default function AgentPublicLanding() {
         const res = await fetch("/.netlify/functions/logan-proof-feed");
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        setProofItems(data || []);
+        setProof(data || []);
       } catch (e) {
-        console.error(e);
+        console.error("logan-proof-feed error", e);
       } finally {
         setProofLoading(false);
       }
     }
+
     loadProof();
   }, []);
+
+  /* ---------------------- Derived values ---------------------- */
 
   const ytId = useMemo(() => {
     if (!site) return "";
@@ -231,37 +243,62 @@ export default function AgentPublicLanding() {
     );
   }, [site]);
 
+  const brandVars = useMemo(() => {
+    const primary = site?.brand_primary || "#6b8cff";
+    const accent = site?.brand_accent || "#9b5cff";
+    return { primary, accent };
+  }, [site]);
+
+  const siteName = site?.site_name || "Momentum Financial";
+  const pageOwner = site?.about_name || "Your Mentor";
+
+  /* ---------------------- Modal helpers ---------------------- */
+
   function openModal() {
-    setModalOpen(true);
+    setOpen(true);
     setStep("contact");
     setLeadId(null);
+    setLeadDraft(null);
+    setFullName("");
+    setEmail("");
+    setPhone("");
   }
 
   function closeModal() {
-    setModalOpen(false);
+    setOpen(false);
   }
 
-  async function handleContactSubmit(e) {
-    e.preventDefault();
+  /* ---------------------- CONTACT → create mm_agent_leads row ---------------------- */
+
+  async function handleContactNext() {
     if (!site) return;
+
+    const name = (fullName || "").trim();
+    const em = (email || "").trim();
+    const ph = (phone || "").trim();
+
+    if (!name && !em && !ph) {
+      alert("Please provide at least a name, email, or phone.");
+      return;
+    }
 
     setSubmitting(true);
     try {
       const utm = readUTM ? readUTM() : null;
-      const now = new Date().toISOString();
+      const nowIso = new Date().toISOString();
 
       const { data, error } = await supabase
         .from("mm_agent_leads")
         .insert({
           agent_site_id: site.id,
-          full_name: fullName,
-          email,
-          phone,
+          full_name: name || null,
+          email: em || null,
+          phone: ph || null,
           utm,
           is_complete: false,
           stage: "new",
-          started_at: now,
-          last_activity_at: now,
+          started_at: nowIso,
+          last_activity_at: nowIso,
         })
         .select("id")
         .single();
@@ -269,169 +306,263 @@ export default function AgentPublicLanding() {
       if (error) throw error;
 
       setLeadId(data.id);
+      setLeadDraft({
+        full_name: name || null,
+        email: em || null,
+        phone: ph || null,
+      });
       setStep("qualify");
-    } catch (err) {
-      console.error(err);
-      alert("Failed to submit. Please try again.");
+    } catch (e) {
+      console.error(e);
+      alert("Could not start your application. Please try again.");
     } finally {
       setSubmitting(false);
     }
   }
 
-  function setAnswer(questionId, value) {
-    setAnswers((prev) => ({ ...prev, [questionId]: value }));
-  }
+  /* ---------------------- QUALIFY → update mm_agent_leads ---------------------- */
 
-  async function handleQualifySubmit(e) {
-    e.preventDefault();
+  async function handleQualifySubmit(values) {
     if (!leadId || !site) {
-      closeModal();
+      setStep("done");
       return;
     }
 
     setSubmitting(true);
     try {
-      const now = new Date().toISOString();
-      const answersPayload = questions.map((q) => ({
+      const nowIso = new Date().toISOString();
+      const answers = questions.map((q) => ({
         question_id: q.id,
         question: q.question_text,
-        value: answers[q.id] ?? "",
+        value: values[q.id] || "",
       }));
 
       const { error } = await supabase
         .from("mm_agent_leads")
         .update({
-          answers: answersPayload,
+          full_name:
+            leadDraft?.full_name || fullName?.trim() || null,
+          email: leadDraft?.email || email?.trim() || null,
+          phone: leadDraft?.phone || phone?.trim() || null,
+          answers,
           is_complete: true,
-          last_activity_at: now,
+          last_activity_at: nowIso,
         })
         .eq("id", leadId);
 
       if (error) throw error;
 
       setStep("done");
-    } catch (err) {
-      console.error(err);
-      alert("Failed to save answers. Please try again.");
+    } catch (e) {
+      console.error(e);
+      alert("Submission failed. Please try again.");
     } finally {
       setSubmitting(false);
     }
   }
 
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <div className="h-5 w-32 bg-white/10 rounded animate-pulse" />
-        <div className="h-10 w-64 bg-white/10 rounded animate-pulse" />
-        <Skeleton className="aspect-video w-full rounded-2xl" />
-      </div>
-    );
-  }
+  /* ---------------------- Render ---------------------- */
 
   if (err) {
     return (
-      <div className="mt-10 text-center text-sm text-red-400">
-        {err}
+      <div className="min-h-screen bg-[#1e1f22] text-white grid place-items-center">
+        <p className="text-sm text-red-400">{err}</p>
       </div>
     );
   }
 
-  const siteName = site.site_name || "Momentum Financial";
-
   return (
-    <div className="space-y-10">
-      {/* Top meta */}
-      <header className="flex items-center justify-between">
+    <div
+      className="min-h-screen bg-[#1e1f22] text-white"
+      style={{
+        "--brand-primary": brandVars.primary,
+        "--brand-accent": brandVars.accent,
+      }}
+    >
+      {/* Header (Logan-style) */}
+      <header className="mx-auto max-w-6xl px-4 py-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="h-9 w-32 bg-white/10 rounded" />
+          {loading ? (
+            <Skeleton className="h-9 w-32 rounded" />
+          ) : site?.logo_url ? (
+            <img
+              src={site.logo_url}
+              alt={siteName}
+              className="h-9"
+            />
+          ) : (
+            <div className="h-9 w-32 bg-white/10 rounded" />
+          )}
           <span className="text-white/60 text-sm">
-            {siteName}
+            {loading ? (
+              <span className="inline-block h-4 w-32 animate-pulse bg-white/10 rounded" />
+            ) : (
+              <>
+                {pageOwner} | {siteName}
+              </>
+            )}
           </span>
         </div>
-        <div className="text-xs text-white/40">
-          Powered by Momentum Manager
-        </div>
+        <div />
       </header>
 
-      {/* HERO */}
-      <main className="mx-auto w-full">
-        <section className="space-y-6">
-          {/* title + sub */}
-          <div className="text-center max-w-2xl mx-auto">
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-semibold tracking-tight">
-              {site.hero_title ||
-                "Build a high-ticket sales career with Momentum Financial"}
-            </h1>
-            <p className="mt-3 text-sm sm:text-base text-white/70">
-              {site.hero_sub ||
-                "High expectations. High results. Real mentorship."}
-            </p>
-          </div>
-
+      <main className="mx-auto max-w-6xl px-4 pb-24">
+        {/* HERO — video + CTA + creator bar */}
+        <section className="pt-2">
           {/* video */}
-          <div className="pt-2">
-            {ytId ? (
-              <div className="mx-auto w-full max-w-[720px]">
-                <div className="relative aspect-video overflow-hidden rounded-2xl border border-white/10 shadow-2xl shadow-black/40">
-                  <iframe
-                    className="absolute inset-0 h-full w-full"
-                    src={`https://www.youtube.com/embed/${ytId}?rel=0&modestbranding=1&playsinline=1`}
-                    title="Intro"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                    allowFullScreen
-                    loading="lazy"
-                  />
-                </div>
+          {loading ? (
+            <div className="mx-auto w-full max-w-[720px]">
+              <Skeleton className="aspect-video w-full rounded-2xl border border-white/10" />
+            </div>
+          ) : ytId ? (
+            <div className="mx-auto w-full max-w-[720px]">
+              <div className="relative aspect-video overflow-hidden rounded-2xl border border-white/10 shadow-2xl shadow-black/40">
+                <iframe
+                  className="absolute inset-0 h-full w-full"
+                  src={`https://www.youtube.com/embed/${ytId}?rel=0&modestbranding=1&playsinline=1`}
+                  title="Intro"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                  loading="lazy"
+                />
               </div>
-            ) : (
-              <div className="mx-auto w-full max-w-[720px]">
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-                  <div className="aspect-video w-full rounded-xl bg-black/30 border border-white/10 grid place-items-center">
-                    <div className="text-center">
-                      <div className="text-sm uppercase tracking-wide text-white/50">
-                        Video Coming Soon
-                      </div>
+            </div>
+          ) : (
+            <div className="mx-auto w-full max-w-[720px]">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+                <div className="aspect-video w-full rounded-xl bg-black/30 border border-white/10 grid place-items-center">
+                  <div className="text-center">
+                    <div className="text-sm uppercase tracking-wide text-white/50">
+                      Video Coming Soon
                     </div>
                   </div>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* CTA */}
           <div className="mt-4 text-center">
-            <button
-              onClick={openModal}
-              className="inline-flex w-full sm:w-auto items-center justify-center rounded-xl bg-white px-6 py-3 font-semibold text-black shadow hover:shadow-lg active:scale-[.99]"
-            >
-              Book Call
-            </button>
+            {loading ? (
+              <Skeleton className="mx-auto h-12 w-full sm:w-72 rounded-xl" />
+            ) : (
+              <button
+                onClick={openModal}
+                className="inline-flex w-full sm:w-auto items-center justify-center rounded-xl bg-white px-6 py-3
+                           font-semibold text-black shadow hover:shadow-lg active:scale-[.99]"
+              >
+                Book Call
+              </button>
+            )}
           </div>
 
-          {/* About + socials */}
-          <section className="mt-6 max-w-3xl mx-auto text-left">
-            <h2 className="text-base font-semibold text-white/90">
-              About {site.about_name || "your hiring manager"}
-            </h2>
-            <p className="mt-2 text-sm text-white/70">
-              {site.about_bio ||
-                "This section will be powered by your real bio, production, and expectations once you fill it out in your Agent Settings panel."}
-            </p>
+          {/* Creator / socials */}
+          {loading ? (
+            <div className="mt-5">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-10 w-10 rounded-xl" />
+                  <div className="flex-1">
+                    <Skeleton className="h-3 w-24 rounded mb-2" />
+                    <Skeleton className="h-4 w-40 rounded" />
+                  </div>
+                  <Skeleton className="h-9 w-28 rounded-xl" />
+                  <Skeleton className="h-9 w-28 rounded-xl" />
+                </div>
+              </div>
+            </div>
+          ) : (
             <CreatorBar settings={site} />
-          </section>
+          )}
 
-          {/* Proof */}
-          {!proofLoading && proofItems.length > 0 && (
-            <ProofSection items={proofItems} />
+          {/* Headline + sub */}
+          <div className="mt-8">
+            {loading ? (
+              <>
+                <Skeleton className="h-8 w-3/4 rounded mb-2" />
+                <Skeleton className="h-4 w-1/2 rounded" />
+              </>
+            ) : (
+              <>
+                <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight">
+                  {site?.hero_title ||
+                    "Build a high-ticket sales career"}
+                </h1>
+                <p className="mt-3 text-white/70 text-lg">
+                  {site?.hero_sub ||
+                    "High Expectations. High Results."}
+                </p>
+              </>
+            )}
+          </div>
+
+          {/* PROOF (Logan-style carousel) */}
+          <div className="mt-6">
+            {loading || proofLoading ? (
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <Skeleton key={i} className="h-28 w-full rounded-xl" />
+                  ))}
+                </div>
+              </div>
+            ) : (
+              proof.length > 0 && (
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                  <ProofFeed
+                    items={proof}
+                    visibleCount={4}
+                    cycleMs={3000}
+                    blurTransition
+                    bigSlides
+                  />
+                </div>
+              )
+            )}
+          </div>
+        </section>
+
+        {/* ABOUT section (Logan-style) */}
+        <section className="mt-16 grid gap-6 sm:grid-cols-[160px,1fr] items-start">
+          {loading ? (
+            <>
+              <Skeleton className="h-40 w-40 rounded-2xl" />
+              <div>
+                <Skeleton className="h-5 w-40 rounded mb-3" />
+                <Skeleton className="h-4 w-full rounded mb-2" />
+                <Skeleton className="h-4 w-5/6 rounded" />
+              </div>
+            </>
+          ) : (
+            <>
+              {site?.headshot_url ? (
+                <img
+                  src={site.headshot_url}
+                  alt={pageOwner}
+                  className="h-40 w-40 rounded-2xl object-cover"
+                />
+              ) : (
+                <div className="h-40 w-40 rounded-2xl bg-white/10" />
+              )}
+              <div>
+                <h2 className="text-xl font-bold">
+                  About {pageOwner}
+                </h2>
+                <p className="text-white/80 mt-2">
+                  {site?.about_bio ||
+                    "This section will be powered by your real bio once you fill it out in your Agent Settings panel."}
+                </p>
+              </div>
+            </>
           )}
         </section>
       </main>
 
-      {/* MODAL */}
-      {modalOpen && (
+      {/* BOOKING MODAL (same 2-step flow, wired to mm_agent_* tables) */}
+      {open && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
           <div className="w-full max-w-2xl rounded-2xl bg-[#2b2d31] border border-white/10 p-4">
-            {/* header */}
+            {/* HEADER */}
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-lg font-semibold">
                 {step === "contact"
@@ -450,132 +581,88 @@ export default function AgentPublicLanding() {
 
             {/* STEP: CONTACT */}
             {step === "contact" && (
-              <form onSubmit={handleContactSubmit} className="grid gap-3">
-                <div className="grid gap-1">
-                  <label className="text-xs text-white/60">Full name</label>
+              <div className="grid gap-3">
+                <div className="grid gap-2">
+                  <label className="text-sm text-white/70">
+                    Full Name
+                  </label>
                   <input
-                    className="w-full rounded-lg bg-white/5 border border-white/15 px-3 py-2 text-sm"
+                    className="w-full rounded-lg bg-black/30 border border-white/10 px-3 py-2 outline-none text-sm"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    required
+                    placeholder="John Carter"
                   />
                 </div>
-                <div className="grid gap-1">
-                  <label className="text-xs text-white/60">Email</label>
+                <div className="grid gap-2">
+                  <label className="text-sm text-white/70">
+                    Phone
+                  </label>
                   <input
-                    type="email"
-                    className="w-full rounded-lg bg-white/5 border border-white/15 px-3 py-2 text-sm"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="grid gap-1">
-                  <label className="text-xs text-white/60">Phone</label>
-                  <input
-                    className="w-full rounded-lg bg-white/5 border border-white/15 px-3 py-2 text-sm"
+                    className="w-full rounded-lg bg-black/30 border border-white/10 px-3 py-2 outline-none text-sm"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    required
+                    placeholder="(555) 555-5555"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm text-white/70">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    className="w-full rounded-lg bg-black/30 border border-white/10 px-3 py-2 outline-none text-sm"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
                   />
                 </div>
 
-                <p className="text-[11px] text-white/45">
-                  This will create a lead in your hiring manager&apos;s
-                  Momentum Manager account and send them a notification.
-                </p>
-
-                <div className="mt-2 flex justify-end gap-2">
+                <div className="flex items-center justify-end gap-2 mt-2">
                   <button
-                    type="button"
                     onClick={closeModal}
-                    className="px-3 py-1.5 rounded-lg text-xs text-white/70 hover:bg-white/5"
+                    className="px-3 py-2 rounded-lg border border-white/15 text-white/80 hover:bg.white/5 text-xs"
                   >
                     Cancel
                   </button>
                   <button
-                    type="submit"
-                    className="px-4 py-2 rounded-lg text-xs font-semibold bg-white text-black hover:bg-white/90"
+                    onClick={handleContactNext}
+                    className="px-4 py-2 rounded-lg bg-white text-black font-semibold text-xs"
                     disabled={submitting}
                   >
                     {submitting ? "Submitting..." : "Next"}
                   </button>
                 </div>
-              </form>
+                <p className="text-xs text-white/50">
+                  You can finish later; we&apos;ll save your info as an
+                  incomplete application.
+                </p>
+              </div>
             )}
 
-            {/* STEP: QUALIFY */}
+            {/* STEP: QUALIFY (Logan-style, but saving to mm_agent_leads) */}
             {step === "qualify" && (
-              <form onSubmit={handleQualifySubmit} className="grid gap-3">
-                {questions.length === 0 && (
-                  <p className="text-sm text-white/70">
-                    Your hiring manager hasn&apos;t added any questions yet, so
-                    we&apos;ll skip straight to scheduling.
-                  </p>
-                )}
-
-                {questions.map((q) => (
-                  <div key={q.id} className="grid gap-1">
-                    <label className="text-xs text-white/70">
-                      {q.question_text}
-                      {q.is_required && (
-                        <span className="text-red-400">*</span>
-                      )}
-                    </label>
-                    {q.input_type === "textarea" ? (
-                      <textarea
-                        className="w-full rounded-lg bg-white/5 border border-white/15 px-3 py-2 text-sm"
-                        placeholder={q.placeholder || ""}
-                        value={answers[q.id] || ""}
-                        onChange={(e) =>
-                          setAnswer(q.id, e.target.value)
-                        }
-                        required={q.is_required}
-                      />
-                    ) : (
-                      <input
-                        className="w-full rounded-lg bg-white/5 border border-white/15 px-3 py-2 text-sm"
-                        placeholder={q.placeholder || ""}
-                        value={answers[q.id] || ""}
-                        onChange={(e) =>
-                          setAnswer(q.id, e.target.value)
-                        }
-                        required={q.is_required}
-                      />
-                    )}
-                    {q.help_text && (
-                      <p className="text-[11px] text-white/50">
-                        {q.help_text}
-                      </p>
-                    )}
-                  </div>
-                ))}
-
-                <div className="mt-2 flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={closeModal}
-                    className="px-3 py-1.5 rounded-lg text-xs text-white/70 hover:bg-white/5"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 rounded-lg text-xs font-semibold bg-white text-black hover:bg-white/90"
-                    disabled={submitting}
-                  >
-                    {submitting ? "Submitting..." : "Finish"}
-                  </button>
-                </div>
-              </form>
+              <div>
+                <button
+                  onClick={() => setStep("contact")}
+                  className="text-white/60 hover:text-white mb-3 text-sm"
+                >
+                  ← Back
+                </button>
+                <QualifyForm
+                  questions={questions}
+                  onSubmit={handleQualifySubmit}
+                  submitting={submitting}
+                />
+              </div>
             )}
 
             {/* STEP: DONE */}
             {step === "done" && (
               <div className="space-y-3 text-sm text-white/80">
                 <p>
-                  Thanks for applying. Your information has been sent to the
-                  team. They&apos;ll reach out to you about next steps.
+                  Thanks for applying. Your information has been sent to{" "}
+                  {pageOwner}&apos;s team. They&apos;ll reach out to you
+                  about next steps.
                 </p>
                 <div className="flex justify-end">
                   <button
