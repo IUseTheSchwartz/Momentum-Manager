@@ -7,14 +7,16 @@ export default function Nav() {
   const [authed, setAuthed] = useState(false);
   const loc = useLocation();
 
-  // Hide nav links on landing, auth pages, public lead manager, and get-my-landing-page
+  // Hide nav links on landing, auth pages, public lead manager, get-my-landing-page,
+  // and the agent "My recruiting site" page.
   const HIDE_LINKS_PATHS = new Set([
     "/",
     "/login",
-    "/login-agent",      // 👈 new agent-login page
+    "/login-agent",
     "/signup",
     "/momentum-lead-manager",
     "/get-my-landing-page",
+    "/my-landing-page",      // 👈 hide links on agent settings page
   ]);
   const hideLinks = HIDE_LINKS_PATHS.has(loc.pathname);
 
