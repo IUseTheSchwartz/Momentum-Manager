@@ -9,6 +9,9 @@ import MomentumLeadManager from "./pages/MomentumLeadManager.jsx";
 import GetMyLandingPage from "./pages/GetMyLandingPage.jsx";
 import AgentLogin from "./pages/AgentLogin.jsx";
 
+// Public agent landing (Logan-style per-agent page)
+import AgentPublicLanding from "./pages/AgentPublicLanding.jsx";
+
 // Agent site pages
 import MyLandingPage from "./pages/MyLandingPage.jsx";
 import AgentSettings from "./pages/AgentSettings.jsx";
@@ -80,6 +83,9 @@ export default function App() {
               <Route path="/manager/members" element={<ManagerMembers />} />
             </Route>
           </Route>
+
+          {/* Public agent landing (slug-based) */}
+          <Route path="/:slug" element={<AgentPublicLanding />} />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
