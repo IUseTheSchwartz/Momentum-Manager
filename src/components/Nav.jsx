@@ -1,3 +1,4 @@
+// File: src/components/Nav.jsx
 import { Link, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
@@ -7,8 +8,6 @@ export default function Nav() {
   const [authed, setAuthed] = useState(false);
   const loc = useLocation();
 
-  // Hide nav links on landing, auth pages, public lead manager, get-my-landing-page,
-  // and the agent "My recruiting site" page.
   const HIDE_LINKS_PATHS = new Set([
     "/",
     "/login",
@@ -16,9 +15,11 @@ export default function Nav() {
     "/signup",
     "/momentum-lead-manager",
     "/get-my-landing-page",
-    "/my-landing-page",      // 👈 hide links on agent settings page
   ]);
-  const hideLinks = HIDE_LINKS_PATHS.has(loc.pathname);
+
+  const hideLinks =
+    HIDE_LINKS_PATHS.has(loc.pathname) ||
+    loc.pathname.startsWith("/my-landing-page"); // hide for all tabs
 
   useEffect(() => {
     let mounted = true;
