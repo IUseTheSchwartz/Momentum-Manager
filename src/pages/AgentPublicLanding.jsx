@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient.js";
 import { readUTM } from "../lib/utm.js";
-import ProofFeed from "../components/ProofFeed.jsx";
 import QualifyForm from "../components/QualifyForm.jsx";
 
 /* --------------------------- helpers --------------------------- */
@@ -31,12 +30,12 @@ function Skeleton({ className = "" }) {
 /* ---------------------- Creator Bar (Logan-style) ---------------------- */
 
 function CreatorBar({ settings }) {
-  const name   = settings?.about_name || "Your Name";
+  const name = settings?.about_name || "Your Name";
   const avatar = settings?.headshot_url || null;
 
-  const ytUrl  = settings?.social_youtube_url || "";
-  const igUrl  = settings?.social_instagram_url || "";
-  const scUrl  = settings?.social_snapchat_url || "";
+  const ytUrl = settings?.social_youtube_url || "";
+  const igUrl = settings?.social_instagram_url || "";
+  const scUrl = settings?.social_snapchat_url || "";
 
   const items = [
     ytUrl && {
@@ -145,16 +144,14 @@ function CreatorBar({ settings }) {
   );
 }
 
-/* ---------------------- Main page (Logan-style layout) ---------------------- */
+/* ---------------------- Main page (Logan-style layout, no proof) ---------------------- */
 
 export default function AgentPublicLanding() {
   const { slug } = useParams();
 
   const [site, setSite] = useState(null);
   const [questions, setQuestions] = useState([]);
-  const [proof, setProof] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [proofLoading, setProofLoading] = useState(true);
   const [err, setErr] = useState(null);
 
   // modal / booking
@@ -212,26 +209,6 @@ export default function AgentPublicLanding() {
 
     load();
   }, [slug]);
-
-  /* ---------------------- Load proof from Logan function ---------------------- */
-
-  useEffect(() => {
-    async function loadProof() {
-      setProofLoading(true);
-      try {
-        const res = await fetch("/.netlify/functions/logan-proof-feed");
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        setProof(data || []);
-      } catch (e) {
-        console.error("logan-proof-feed error", e);
-      } finally {
-        setProofLoading(false);
-      }
-    }
-
-    loadProof();
-  }, []);
 
   /* ---------------------- Derived values ---------------------- */
 
@@ -340,8 +317,7 @@ export default function AgentPublicLanding() {
       const { error } = await supabase
         .from("mm_agent_leads")
         .update({
-          full_name:
-            leadDraft?.full_name || fullName?.trim() || null,
+          full_name: leadDraft?.full_name || fullName?.trim() || null,
           email: leadDraft?.email || email?.trim() || null,
           phone: leadDraft?.phone || phone?.trim() || null,
           answers,
@@ -385,11 +361,7 @@ export default function AgentPublicLanding() {
           {loading ? (
             <Skeleton className="h-9 w-32 rounded" />
           ) : site?.logo_url ? (
-            <img
-              src={site.logo_url}
-              alt={siteName}
-              className="h-9"
-            />
+            <img src={site.logo_url} alt={siteName} className="h-9" />
           ) : (
             <div className="h-9 w-32 bg-white/10 rounded" />
           )}
@@ -448,8 +420,8 @@ export default function AgentPublicLanding() {
             ) : (
               <button
                 onClick={openModal}
-                className="inline-flex w-full sm:w-auto items-center justify-center rounded-xl bg-white px-6 py-3
-                           font-semibold text-black shadow hover:shadow-lg active:scale-[.99]"
+                className="inline-flex w-full sm:w-auto items-center justify-center rounded-xl bg.white px-6 py-3
+                           font-semibold text-black shadow hover:shadow-lg active:scale-[.99] bg-white"
               >
                 Book Call
               </button>
@@ -485,39 +457,12 @@ export default function AgentPublicLanding() {
             ) : (
               <>
                 <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight">
-                  {site?.hero_title ||
-                    "Build a high-ticket sales career"}
+                  {site?.hero_title || "Build a high-ticket sales career"}
                 </h1>
                 <p className="mt-3 text-white/70 text-lg">
-                  {site?.hero_sub ||
-                    "High Expectations. High Results."}
+                  {site?.hero_sub || "High Expectations. High Results."}
                 </p>
               </>
-            )}
-          </div>
-
-          {/* PROOF (Logan-style carousel) */}
-          <div className="mt-6">
-            {loading || proofLoading ? (
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <Skeleton key={i} className="h-28 w-full rounded-xl" />
-                  ))}
-                </div>
-              </div>
-            ) : (
-              proof.length > 0 && (
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-                  <ProofFeed
-                    items={proof}
-                    visibleCount={4}
-                    cycleMs={3000}
-                    blurTransition
-                    bigSlides
-                  />
-                </div>
-              )
             )}
           </div>
         </section>
@@ -545,9 +490,7 @@ export default function AgentPublicLanding() {
                 <div className="h-40 w-40 rounded-2xl bg-white/10" />
               )}
               <div>
-                <h2 className="text-xl font-bold">
-                  About {pageOwner}
-                </h2>
+                <h2 className="text-xl font-bold">About {pageOwner}</h2>
                 <p className="text-white/80 mt-2">
                   {site?.about_bio ||
                     "This section will be powered by your real bio once you fill it out in your Agent Settings panel."}
@@ -558,7 +501,7 @@ export default function AgentPublicLanding() {
         </section>
       </main>
 
-      {/* BOOKING MODAL (same 2-step flow, wired to mm_agent_* tables) */}
+      {/* BOOKING MODAL */}
       {open && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
           <div className="w-full max-w-2xl rounded-2xl bg-[#2b2d31] border border-white/10 p-4">
@@ -583,9 +526,7 @@ export default function AgentPublicLanding() {
             {step === "contact" && (
               <div className="grid gap-3">
                 <div className="grid gap-2">
-                  <label className="text-sm text-white/70">
-                    Full Name
-                  </label>
+                  <label className="text-sm text-white/70">Full Name</label>
                   <input
                     className="w-full rounded-lg bg-black/30 border border-white/10 px-3 py-2 outline-none text-sm"
                     value={fullName}
@@ -594,9 +535,7 @@ export default function AgentPublicLanding() {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <label className="text-sm text-white/70">
-                    Phone
-                  </label>
+                  <label className="text-sm text-white/70">Phone</label>
                   <input
                     className="w-full rounded-lg bg-black/30 border border-white/10 px-3 py-2 outline-none text-sm"
                     value={phone}
@@ -605,9 +544,7 @@ export default function AgentPublicLanding() {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <label className="text-sm text-white/70">
-                    Email
-                  </label>
+                  <label className="text-sm text-white/70">Email</label>
                   <input
                     type="email"
                     className="w-full rounded-lg bg-black/30 border border-white/10 px-3 py-2 outline-none text-sm"
@@ -620,7 +557,7 @@ export default function AgentPublicLanding() {
                 <div className="flex items-center justify-end gap-2 mt-2">
                   <button
                     onClick={closeModal}
-                    className="px-3 py-2 rounded-lg border border-white/15 text-white/80 hover:bg.white/5 text-xs"
+                    className="px-3 py-2 rounded-lg border border-white/15 text-white/80 hover:bg-white/5 text-xs"
                   >
                     Cancel
                   </button>
@@ -639,7 +576,7 @@ export default function AgentPublicLanding() {
               </div>
             )}
 
-            {/* STEP: QUALIFY (Logan-style, but saving to mm_agent_leads) */}
+            {/* STEP: QUALIFY */}
             {step === "qualify" && (
               <div>
                 <button
@@ -661,8 +598,8 @@ export default function AgentPublicLanding() {
               <div className="space-y-3 text-sm text-white/80">
                 <p>
                   Thanks for applying. Your information has been sent to{" "}
-                  {pageOwner}&apos;s team. They&apos;ll reach out to you
-                  about next steps.
+                  {pageOwner}&apos;s team. They&apos;ll reach out to you about
+                  next steps.
                 </p>
                 <div className="flex justify-end">
                   <button
