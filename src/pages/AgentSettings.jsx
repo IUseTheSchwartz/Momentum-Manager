@@ -89,7 +89,7 @@ export default function AgentSettings() {
             hero_title:
               "Build a high-ticket sales career with Momentum Financial",
             hero_sub: "High expectations. High results. Real mentorship.",
-            hero_youtube_url: DEFAULT_INTRO_VIDEO_URL, // 🔹 default to Logan intro video
+            hero_youtube_url: DEFAULT_INTRO_VIDEO_URL, // default to Logan intro video
             notification_emails: user.email || "",
             is_active: true,
             show_proof: true,
@@ -117,7 +117,6 @@ export default function AgentSettings() {
       setHeroSub(siteRow.hero_sub || "");
       setAboutName(siteRow.about_name || "");
       setAboutBio(siteRow.about_bio || "");
-      // 🔹 if no custom video set, default to Logan intro
       setHeroYoutubeUrl(
         siteRow.hero_youtube_url || DEFAULT_INTRO_VIDEO_URL
       );
@@ -150,41 +149,49 @@ export default function AgentSettings() {
   async function submit(e) {
     e.preventDefault();
     if (!site) return;
+
     setSaving(true);
     setError(null);
 
-    // TODO: later wire real headshot upload to Storage; for now we ignore headshotFile
-    const updates = {
-      notification_emails,
-      hero_title: heroTitle,
-      hero_sub: heroSub,
-      about_name: aboutName,
-      about_bio: aboutBio,
-      hero_youtube_url: heroYoutubeUrl,
-      social_youtube_url: socialYoutube,
-      social_instagram_url: socialInstagram,
-      social_snapchat_url: socialSnapchat,
-      updated_at: new Date().toISOString(),
-    };
+    try {
+      // TODO: later wire real headshot upload to Storage; for now we ignore headshotFile
+      const updates = {
+        notification_emails,
+        hero_title: heroTitle,
+        hero_sub: heroSub,
+        about_name: aboutName,
+        about_bio: aboutBio,
+        hero_youtube_url: heroYoutubeUrl,
+        social_youtube_url: socialYoutube,
+        social_instagram_url: socialInstagram,
+        social_snapchat_url: socialSnapchat,
+        updated_at: new Date().toISOString(),
+      };
 
-    const { data, error: upErr } = await supabase
-      .from("mm_agent_sites")
-      .update(updates)
-      .eq("id", site.id)
-      .select("*")
-      .single();
+      const { data, error: upErr } = await supabase
+        .from("mm_agent_sites")
+        .update(updates)
+        .eq("id", site.id)
+        .select("*");
 
-    setSaving(false);
+      if (upErr) {
+        throw upErr;
+      }
 
-    if (upErr) {
-      console.error(upErr);
-      setError("Failed to save settings.");
-      return;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row) {
+        throw new Error("No site row returned from update.");
+      }
+
+      setSite(row);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      console.error(err);
+      setError(err.message || "Failed to save settings.");
+    } finally {
+      setSaving(false);
     }
-
-    setSite(data);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
   }
 
   if (loading) {
@@ -196,7 +203,8 @@ export default function AgentSettings() {
     );
   }
 
-  if (error) {
+  if (error && !site) {
+    // fatal load error
     return (
       <div className="text-sm text-red-400">
         {error || "Something went wrong loading your settings."}
