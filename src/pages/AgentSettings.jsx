@@ -1,15 +1,24 @@
 // File: src/pages/AgentSettings.jsx
-import { useState } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { supabase } from "../lib/supabaseClient.js";
+import { useAuth } from "../auth.jsx";
 
 function slugFromName(name) {
   const trimmed = (name || "").trim().toLowerCase();
-  if (!trimmed) return "first-lastname";
+  if (!trimmed) return "";
   return trimmed
     .replace(/[^a-z0-9\s]/g, "")
     .replace(/\s+/g, "-");
 }
 
 export default function AgentSettings() {
+  const { user } = useAuth();
+  const [site, setSite] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState(null);
+
   const [headshotFile, setHeadshotFile] = useState(null);
   const [notificationEmails, setNotificationEmails] = useState("");
   const [heroTitle, setHeroTitle] = useState("");
@@ -20,28 +29,151 @@ export default function AgentSettings() {
   const [socialYoutube, setSocialYoutube] = useState("");
   const [socialInstagram, setSocialInstagram] = useState("");
   const [socialSnapchat, setSocialSnapchat] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+
+    async function ensureSite() {
+      setLoading(true);
+      setError(null);
+      // 1) Try to find an existing site for this user
+      const { data: existing, error: selErr } = await supabase
+        .from("mm_agent_sites")
+        .select("*")
+        .eq("agent_user_id", user.id)
+        .maybeSingle();
+
+      if (selErr) {
+        console.error(selErr);
+        setError("Failed to load site settings");
+        setLoading(false);
+        return;
+      }
+
+      let siteRow = existing;
+
+      // 2) If none, create with defaults
+      if (!siteRow) {
+        const defaultName =
+          user.user_metadata?.full_name ||
+          user.user_metadata?.name ||
+          "Your Name";
+        const defaultSlug =
+          slugFromName(defaultName) || `agent-${user.id.slice(0, 8)}`;
+
+        const { data: created, error: insErr } = await supabase
+          .from("mm_agent_sites")
+          .insert({
+            agent_user_id: user.id,
+            slug: defaultSlug,
+            about_name: defaultName,
+            site_name: "Momentum Financial",
+            hero_title:
+              "Build a high-ticket sales career with Momentum Financial",
+            hero_sub: "High expectations. High results. Real mentorship.",
+            notification_emails: user.email || "",
+            is_active: true,
+            show_proof: true,
+          })
+          .select("*")
+          .single();
+
+        if (insErr) {
+          console.error(insErr);
+          setError("Failed to create default site");
+          setLoading(false);
+          return;
+        }
+
+        siteRow = created;
+      }
+
+      setSite(siteRow);
+      // hydrate form
+      setNotificationEmails(siteRow.notification_emails || "");
+      setHeroTitle(siteRow.hero_title || "");
+      setHeroSub(siteRow.hero_sub || "");
+      setAboutName(siteRow.about_name || "");
+      setAboutBio(siteRow.about_bio || "");
+      setHeroYoutubeUrl(siteRow.hero_youtube_url || "");
+      setSocialYoutube(siteRow.social_youtube_url || "");
+      setSocialInstagram(siteRow.social_instagram_url || "");
+      setSocialSnapchat(siteRow.social_snapchat_url || "");
+      setLoading(false);
+    }
+
+    ensureSite();
+  }, [user]);
 
   function handleHeadshotChange(e) {
     const file = e.target.files?.[0] || null;
     setHeadshotFile(file);
   }
 
-  function submit(e) {
+  const slug = useMemo(() => {
+    if (!site) return slugFromName(aboutName) || "first-lastname";
+    return site.slug || slugFromName(aboutName) || "first-lastname";
+  }, [site, aboutName]);
+
+  const siteUrl = `https://momentummanager.net/${slug}`;
+  const previewSiteName = `${aboutName || site?.about_name || "Your Name"} | Momentum Financial`;
+
+  async function submit(e) {
     e.preventDefault();
+    if (!site || !user) return;
     setSaving(true);
-    // Shell only – we’ll wire to Supabase later
-    setTimeout(() => {
-      setSaving(false);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    }, 600);
+    setError(null);
+
+    // TODO: later wire real headshot upload to Storage; for now we ignore headshotFile
+    const updates = {
+      notification_emails,
+      hero_title: heroTitle,
+      hero_sub: heroSub,
+      about_name: aboutName,
+      about_bio: aboutBio,
+      hero_youtube_url: heroYoutubeUrl,
+      social_youtube_url: socialYoutube,
+      social_instagram_url: socialInstagram,
+      social_snapchat_url: socialSnapchat,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data, error: upErr } = await supabase
+      .from("mm_agent_sites")
+      .update(updates)
+      .eq("id", site.id)
+      .select("*")
+      .single();
+
+    setSaving(false);
+
+    if (upErr) {
+      console.error(upErr);
+      setError("Failed to save settings");
+      return;
+    }
+
+    setSite(data);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
   }
 
-  const slug = slugFromName(aboutName);
-  const siteUrl = `https://momentummanager.net/${slug}`;
-  const previewSiteName = `${aboutName || "Your Name"} | Momentum Financial`;
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        <div className="h-5 w-40 bg-white/10 rounded animate-pulse" />
+        <div className="h-32 w-full bg-white/5 rounded animate-pulse" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-sm text-red-400">
+        {error || "Something went wrong loading your settings."}
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={submit} className="space-y-6">
@@ -201,20 +333,24 @@ export default function AgentSettings() {
         />
         <p className="text-xs text-white/50">
           This is where your public page will live. It&apos;s generated from
-          your name as <code>first-lastname</code>.
+          your name as <code>first-lastname</code> and stored as a slug.
         </p>
       </section>
 
       {/* Save button */}
       <div className="pt-4">
         <button type="submit" className="btn btn-primary" disabled={saving}>
-          {saving ? "Saving..." : "Save (shell only)"}
+          {saving ? "Saving..." : "Save settings"}
         </button>
         {saved && (
           <span className="ml-3 text-xs text-emerald-400">
-            Saved locally. We&apos;ll wire this into Supabase + your live site
-            next.
+            Saved to Supabase.
           </span>
+        )}
+        {error && (
+          <div className="mt-2 text-xs text-red-400">
+            {error}
+          </div>
         )}
       </div>
     </form>
