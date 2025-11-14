@@ -22,12 +22,22 @@ const DEFAULT_WEEKLY = {
   sun: [],
 };
 
+const DEFAULT_MODEL = {
+  id: null,
+  tz: "America/Chicago",
+  slot_minutes: 30,
+  buffer_minutes: 30,
+  min_lead_hours: 12,
+  booking_window_days: 14,
+  weekly: { ...DEFAULT_WEEKLY },
+};
+
 function Skeleton({ className = "" }) {
   return <div className={`animate-pulse rounded-md bg-white/10 ${className}`} />;
 }
 
 export default function AgentAvailability() {
-  const [model, setModel] = useState(null); // { id?, tz, slot_minutes, buffer_minutes, min_lead_hours, booking_window_days, weekly }
+  const [model, setModel] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -40,73 +50,73 @@ export default function AgentAvailability() {
       setLoading(true);
       setError("");
 
-      const { data, error: avErr } = await supabase
-        .from("mf_availability")
-        .select("*")
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      try {
+        const { data, error: avErr } = await supabase
+          .from("mf_availability")
+          .select("*")
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-      if (cancelled) return;
+        if (cancelled) return;
 
-      if (avErr) {
-        console.error(avErr);
-        setError("Failed to load availability.");
-        setLoading(false);
-        return;
-      }
+        if (avErr) {
+          console.error("[AgentAvailability] load error:", avErr);
+          throw avErr;
+        }
 
-      if (!data) {
-        // no row yet -> use sensible defaults
+        if (!data) {
+          // no row yet -> use defaults
+          setModel({ ...DEFAULT_MODEL });
+          return;
+        }
+
+        let weekly = data.weekly || {};
+        if (typeof weekly === "string") {
+          try {
+            weekly = JSON.parse(weekly);
+          } catch {
+            weekly = {};
+          }
+        }
+
+        const normWeekly = { ...DEFAULT_WEEKLY };
+        for (const d of DAYS) {
+          const raw = weekly[d.key];
+          if (Array.isArray(raw)) {
+            normWeekly[d.key] = raw.map((pair) => {
+              if (
+                Array.isArray(pair) &&
+                typeof pair[0] === "string" &&
+                typeof pair[1] === "string"
+              ) {
+                return [pair[0], pair[1]];
+              }
+              return ["09:00", "21:00"];
+            });
+          }
+        }
+
         setModel({
-          id: null,
-          tz: "America/Chicago",
-          slot_minutes: 30,
-          buffer_minutes: 30,
-          min_lead_hours: 12,
-          booking_window_days: 14,
-          weekly: { ...DEFAULT_WEEKLY },
+          id: data.id,
+          tz: data.tz || "America/Chicago",
+          slot_minutes: data.slot_minutes ?? 30,
+          buffer_minutes: data.buffer_minutes ?? 30,
+          min_lead_hours: data.min_lead_hours ?? 12,
+          booking_window_days: data.booking_window_days ?? 14,
+          weekly: normWeekly,
         });
-        setLoading(false);
-        return;
-      }
-
-      let weekly = data.weekly || {};
-      if (typeof weekly === "string") {
-        try {
-          weekly = JSON.parse(weekly);
-        } catch {
-          weekly = {};
+      } catch (err) {
+        if (!cancelled) {
+          console.error("[AgentAvailability] unexpected load error:", err);
+          setError("Failed to load availability. Using defaults.");
+          setModel({ ...DEFAULT_MODEL });
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
         }
       }
-      // normalize weekly shape and add defaults if missing
-      const normWeekly = { ...DEFAULT_WEEKLY };
-      for (const d of DAYS) {
-        const raw = weekly[d.key];
-        if (Array.isArray(raw)) {
-          normWeekly[d.key] = raw.map((pair) => {
-            if (
-              Array.isArray(pair) &&
-              typeof pair[0] === "string" &&
-              typeof pair[1] === "string"
-            ) {
-              return [pair[0], pair[1]];
-            }
-            return ["09:00", "21:00"];
-          });
-        }
-      }
-
-      setModel({
-        id: data.id,
-        tz: data.tz || "America/Chicago",
-        slot_minutes: data.slot_minutes ?? 30,
-        buffer_minutes: data.buffer_minutes ?? 30,
-        min_lead_hours: data.min_lead_hours ?? 12,
-        booking_window_days: data.booking_window_days ?? 14,
-        weekly: normWeekly,
-      });
-      setLoading(false);
     }
 
     load();
@@ -142,10 +152,11 @@ export default function AgentAvailability() {
   }
 
   function updateRange(dayKey, idx, which, value) {
-    // which: "start" | "end"
     updateWeekly(dayKey, (ranges) =>
       ranges.map((r, i) =>
-        i === idx ? [which === "start" ? value : r[0], which === "end" ? value : r[1]] : r
+        i === idx
+          ? [which === "start" ? value : r[0], which === "end" ? value : r[1]]
+          : r
       )
     );
   }
@@ -161,7 +172,6 @@ export default function AgentAvailability() {
     setSaved(false);
 
     try {
-      // Clean weekly: remove empty / invalid ranges
       const cleanedWeekly = {};
       for (const d of DAYS) {
         const list = model.weekly?.[d.key] || [];
@@ -201,7 +211,7 @@ export default function AgentAvailability() {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
-      console.error(err);
+      console.error("[AgentAvailability] save error:", err);
       setError("Failed to save availability.");
     } finally {
       setSaving(false);
