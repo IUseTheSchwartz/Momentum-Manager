@@ -1,7 +1,6 @@
 // File: src/pages/AgentSettings.jsx
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient.js";
-import { useAuth } from "../auth.jsx";
 
 function slugFromName(name) {
   const trimmed = (name || "").trim().toLowerCase();
@@ -12,7 +11,6 @@ function slugFromName(name) {
 }
 
 export default function AgentSettings() {
-  const { user } = useAuth();
   const [site, setSite] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -31,28 +29,46 @@ export default function AgentSettings() {
   const [socialSnapchat, setSocialSnapchat] = useState("");
 
   useEffect(() => {
-    if (!user) return;
+    let cancelled = false;
 
     async function ensureSite() {
       setLoading(true);
       setError(null);
-      // 1) Try to find an existing site for this user
+
+      // 1) get current user from Supabase auth
+      const {
+        data: { user },
+        error: userErr,
+      } = await supabase.auth.getUser();
+
+      if (cancelled) return;
+
+      if (userErr || !user) {
+        console.error(userErr);
+        setError("You must be logged in to manage your recruiting site.");
+        setLoading(false);
+        return;
+      }
+
+      // 2) Try to find an existing site for this user
       const { data: existing, error: selErr } = await supabase
         .from("mm_agent_sites")
         .select("*")
         .eq("agent_user_id", user.id)
         .maybeSingle();
 
+      if (cancelled) return;
+
       if (selErr) {
         console.error(selErr);
-        setError("Failed to load site settings");
+        setError("Failed to load site settings.");
         setLoading(false);
         return;
       }
 
       let siteRow = existing;
 
-      // 2) If none, create with defaults
+      // 3) If none, create with defaults
       if (!siteRow) {
         const defaultName =
           user.user_metadata?.full_name ||
@@ -78,9 +94,11 @@ export default function AgentSettings() {
           .select("*")
           .single();
 
+        if (cancelled) return;
+
         if (insErr) {
           console.error(insErr);
-          setError("Failed to create default site");
+          setError("Failed to create default site.");
           setLoading(false);
           return;
         }
@@ -89,7 +107,8 @@ export default function AgentSettings() {
       }
 
       setSite(siteRow);
-      // hydrate form
+
+      // hydrate form state
       setNotificationEmails(siteRow.notification_emails || "");
       setHeroTitle(siteRow.hero_title || "");
       setHeroSub(siteRow.hero_sub || "");
@@ -103,7 +122,11 @@ export default function AgentSettings() {
     }
 
     ensureSite();
-  }, [user]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function handleHeadshotChange(e) {
     const file = e.target.files?.[0] || null;
@@ -120,7 +143,7 @@ export default function AgentSettings() {
 
   async function submit(e) {
     e.preventDefault();
-    if (!site || !user) return;
+    if (!site) return;
     setSaving(true);
     setError(null);
 
@@ -149,7 +172,7 @@ export default function AgentSettings() {
 
     if (upErr) {
       console.error(upErr);
-      setError("Failed to save settings");
+      setError("Failed to save settings.");
       return;
     }
 
