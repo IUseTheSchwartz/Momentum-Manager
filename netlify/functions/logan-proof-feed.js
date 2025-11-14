@@ -18,7 +18,7 @@ function formatDate(iso) {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  // Logan style: MM/DD
+  // Logan style is just MM/DD
   return d.toLocaleDateString("en-US", {
     month: "numeric",
     day: "numeric",
@@ -29,64 +29,22 @@ function formatDate(iso) {
  * Discord-style proof carousel (Logan vibe)
  *
  * Props:
- *  - items:        array of proof posts (optional)
+ *  - items:        array of proof posts
  *  - visibleCount: number of cards to show at once
  *  - cycleMs:      auto-advance interval in ms
  *  - blurTransition, bigSlides: cosmetic flags (kept to match Logan API)
- *
- * If `items` is empty or not passed, this component will
- * automatically fetch from `/.netlify/functions/logan-proof-feed`.
  */
 export default function ProofFeed({
-  items: itemsProp = [],
+  items = [],
   visibleCount = 4,
   cycleMs = 3000,
   blurTransition = false,
   bigSlides = false,
 }) {
-  const [items, setItems] = useState(itemsProp || []);
-  const [loadedFromFunction, setLoadedFromFunction] = useState(false);
-
-  // keep in sync if parent passes items
-  useEffect(() => {
-    if (itemsProp && itemsProp.length) {
-      setItems(itemsProp);
-      setLoadedFromFunction(true); // we have data, no need to auto-fetch
-    }
-  }, [itemsProp]);
-
-  // fallback: if parent didn't give any items, pull from Netlify function
-  useEffect(() => {
-    if (itemsProp && itemsProp.length) return; // parent owns it
-
-    (async () => {
-      try {
-        const res = await fetch("/.netlify/functions/logan-proof-feed");
-        if (!res.ok) {
-          console.error("logan-proof-feed status", res.status);
-          setLoadedFromFunction(true);
-          return;
-        }
-        const json = await res.json();
-        if (Array.isArray(json)) {
-          setItems(json);
-        } else {
-          setItems([]);
-        }
-      } catch (err) {
-        console.error("logan-proof-feed fetch error", err);
-        setItems([]);
-      } finally {
-        setLoadedFromFunction(true);
-      }
-    })();
-  }, [itemsProp]);
-
+  const [index, setIndex] = useState(0);
   const total = items.length;
 
   // Auto-cycle like Logan’s bar
-  const [index, setIndex] = useState(0);
-
   useEffect(() => {
     if (total <= visibleCount) return;
     const id = setInterval(() => {
@@ -106,17 +64,13 @@ export default function ProofFeed({
     return out;
   }, [items, index, total, visibleCount]);
 
-  // Only show the "Recent wins" message after we've tried to load
-  if (!total && loadedFromFunction) {
+  if (!total) {
     return (
       <div className="text-sm text-white/60 px-2 py-4 text-center">
-        Recent wins will show up here once they&apos;re added.
+        Recent wins will show up here once they’re added.
       </div>
     );
   }
-
-  // While loading (no items yet, but not done), just render nothing so the parent skeleton shows
-  if (!total) return null;
 
   return (
     <div className="w-full">
