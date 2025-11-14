@@ -26,12 +26,6 @@ function formatDate(iso) {
 
 /**
  * Discord-style proof carousel (Logan vibe)
- *
- * Props:
- *  - items:        array of proof posts
- *  - visibleCount: cards per "page"
- *  - cycleMs:      time between page slides
- *  - blurTransition, bigSlides: cosmetic flags kept for API compatibility
  */
 export default function ProofFeed({
   items = [],
@@ -45,14 +39,13 @@ export default function ProofFeed({
     if (!items.length) return [];
     const arr = [];
     for (let i = 0; i < items.length; i += visibleCount) {
-      arr.push(items.slice(i, i + visibleCount));
+      arr.push(items.slice(i + 0, i + visibleCount));
     }
     return arr;
   }, [items, visibleCount]);
 
   const [pageIndex, setPageIndex] = useState(0);
 
-  // Reset page when items change
   useEffect(() => {
     setPageIndex(0);
   }, [items.length, visibleCount]);
@@ -101,7 +94,7 @@ export default function ProofFeed({
         </div>
       </div>
 
-      {/* Dots under slider (Discord-style) */}
+      {/* Dots */}
       {pages.length > 1 && (
         <div className="mt-3 flex justify-center gap-1">
           {pages.map((_, i) => (
@@ -131,13 +124,16 @@ function ProofCard({ item, blur }) {
   } = item;
 
   const amountStr = formatAmount(amount_cents, currency);
+  // 🔹 Combine amount + message into ONE line, like Logan’s:
+  const bodyLine = [amountStr, message_text].filter(Boolean).join(" ");
+
   const dateStr = formatDate(happened_at);
 
   return (
     <article
       className={[
-        "rounded-2xl border border-white/12",
-        "bg-[#2b2d31] px-4 py-3", // Discord grey
+        "rounded-xl",
+        "bg-[#2b2d31] px-4 py-3", // Discord grey card
         "flex flex-col justify-between",
         "shadow-[0_0_0_1px_rgba(0,0,0,0.4)]",
         blur ? "backdrop-blur-sm" : "",
@@ -158,7 +154,7 @@ function ProofCard({ item, blur }) {
         )}
 
         <div className="min-w-0 flex-1">
-          <div className="text-[13px] font-medium text-white leading-tight truncate">
+          <div className="text-[13px] font-semibold text-white leading-tight truncate">
             {display_name || "Agent"}
           </div>
         </div>
@@ -170,17 +166,10 @@ function ProofCard({ item, blur }) {
         )}
       </div>
 
-      {/* amount (big, green like Logan) */}
-      {amountStr && (
-        <div className="text-sm font-semibold text-emerald-300 leading-tight">
-          {amountStr}
-        </div>
-      )}
-
-      {/* message text (product / details) */}
-      {message_text && (
-        <p className="mt-1 text-[11px] text-white/80 leading-snug line-clamp-3">
-          {message_text}
+      {/* single white line with amount + product/EFT, like Logan */}
+      {bodyLine && (
+        <p className="mt-1 text-[13px] text-white leading-snug line-clamp-2">
+          {bodyLine}
         </p>
       )}
     </article>
