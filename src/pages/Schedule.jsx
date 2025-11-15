@@ -260,8 +260,7 @@ export default function Schedule() {
           return;
         }
 
-        console.log("[Schedule] loaded siteRow:", siteRow); // debug
-
+        console.log("[Schedule] loaded siteRow:", siteRow);
         setSite(siteRow);
 
         const s = await computeSlotsForAgentSite(siteRow.id);
@@ -278,25 +277,8 @@ export default function Schedule() {
   }, [leadId]);
 
   const siteName = site?.site_name || "Momentum Financial";
-
-  // 🔹 Fallback: try about_name first, then humanized slug, then last-resort copy
-  const slugName = (() => {
-    if (!site?.slug) return "";
-    const raw = `${site.slug}`.replace(/^\//, "").split(/[/?#]/)[0];
-    return raw
-      .split("-")
-      .map((part) =>
-        part ? part[0].toUpperCase() + part.slice(1).toLowerCase() : ""
-      )
-      .join(" ")
-      .trim();
-  })();
-
-  const pageOwner =
-    (typeof site?.about_name === "string" && site.about_name.trim()) ||
-    slugName ||
-    "Your Mentor";
-
+  // 🔹 FORCE it to use about_name; no "Your Mentor" fallback
+  const pageOwner = site?.about_name || "Momentum Financial";
   const homeHref = site?.slug ? `/${site.slug}` : "/";
 
   async function handleBook(slt) {
