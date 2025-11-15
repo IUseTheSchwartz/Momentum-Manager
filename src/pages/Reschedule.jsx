@@ -5,6 +5,7 @@ export default function Reschedule() {
   const params = new URLSearchParams(window.location.search);
   const apptFromUrl = params.get("appt") || "";
   const tokenFromUrl = params.get("t") || "";
+  const leadFromUrl = params.get("lead_id") || "";
 
   const [email, setEmail] = useState("");
   const [step, setStep] = useState("verify"); // verify -> pick -> done
@@ -14,6 +15,7 @@ export default function Reschedule() {
   const [err, setErr] = useState("");
   const [apptId, setApptId] = useState(apptFromUrl || "");
   const [token, setToken] = useState(tokenFromUrl || "");
+  const [leadId] = useState(leadFromUrl || "");
 
   useEffect(() => {
     // Do NOT error if appt/token are missing; we support email-only.
@@ -29,17 +31,20 @@ export default function Reschedule() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "lookup",
-          // email is always used; appt/token are optional
           email: email.trim(),
-          appt_id: apptId || undefined,
-          token: token || undefined,
+          appt_id: apptId || undefined, // not really used in our version
+          token: token || undefined,    // not used, but safe to send
+          lead_id: leadId || undefined, // 🔹 key for agent flow
         }),
       });
       const json = await res.json();
-      if (!res.ok || !json?.ok)
-        throw new Error(json?.error || "Could not verify your appointment.");
+      if (!res.ok || !json?.ok) {
+        throw new Error(
+          json?.error || "Could not verify your appointment."
+        );
+      }
 
-      // Save what the backend resolved (works for email-only and token links)
+      // Save what the backend resolved
       setApptId(json.appt_id);
       setToken(json.token || "");
       setCurrentWhen(json.current_label || "");
@@ -63,12 +68,14 @@ export default function Reschedule() {
           action: "reschedule",
           appt_id: apptId,
           token,
+          lead_id: leadId || undefined,
           start_utc: startUtc,
         }),
       });
       const json = await res.json();
-      if (!res.ok || !json?.ok)
+      if (!res.ok || !json?.ok) {
         throw new Error(json?.error || "Could not reschedule.");
+      }
       setStep("done");
     } catch (e) {
       setErr(e.message || "Reschedule failed.");
@@ -108,7 +115,7 @@ export default function Reschedule() {
             >
               {loading ? "Checking..." : "Continue"}
             </button>
-            {/* Tip: if the link included appt/token, we’ll use them automatically after you confirm the email. */}
+            {/* If the link included appt/token, we’ll use them automatically after you confirm the email. */}
           </div>
         )}
 
@@ -153,9 +160,8 @@ export default function Reschedule() {
             <div className="rounded-lg border border-white/10 bg-white/5 p-3">
               <div className="font-semibold">All set!</div>
               <div className="text-white/70 text-sm">
-                We’ve updated your appointment and sent a fresh confirmation
-                email with the new time and a reschedule link if you need to
-                change it again.
+                We’ve updated your appointment with the new time. Keep an eye
+                on your phone and email for details.
               </div>
             </div>
           </div>
