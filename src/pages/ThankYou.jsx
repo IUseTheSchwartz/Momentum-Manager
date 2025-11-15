@@ -15,8 +15,7 @@ function escapeHtml(str = "") {
     .replace(/"/g, "&quot;");
 }
 
-const SITE_URL =
-  import.meta.env.VITE_SITE_URL || window.location.origin;
+const SITE_URL = import.meta.env.VITE_SITE_URL || window.location.origin;
 
 export default function ThankYou() {
   const [searchParams] = useSearchParams();
@@ -35,7 +34,7 @@ export default function ThankYou() {
           return;
         }
 
-        // fetch lead (with answers + stage flags)
+        // 1) fetch lead
         const { data: leadRow, error: leadErr } = await supabase
           .from("mm_agent_leads")
           .select("*")
@@ -51,7 +50,7 @@ export default function ThankYou() {
 
         setLead(leadRow);
 
-        // fetch site
+        // 2) fetch site
         const { data: siteRow, error: siteErr } = await supabase
           .from("mm_agent_sites")
           .select("*")
@@ -68,7 +67,13 @@ export default function ThankYou() {
         setSite(siteRow);
         setLoading(false);
 
-        // mark stage complete + send final email ONCE
+        // 3) send appointment confirmation email to the lead
+        //    (uses mm_agent_appointments and /send-email)
+        if (leadRow.email) {
+          await sendAppointmentEmail(siteRow, leadRow);
+        }
+
+        // 4) mark stage complete + send internal "new application" email ONCE
         if (!leadRow.completed_emailed) {
           await finalizeAndNotify(siteRow, leadRow);
         }
@@ -158,6 +163,94 @@ export default function ThankYou() {
       </main>
     </div>
   );
+}
+
+/* -------------------- Email helpers -------------------- */
+
+// Simple formatter similar to formatAppt from Logan’s code
+function formatApptForEmail(whenIso, tz = "America/Chicago") {
+  try {
+    const d = new Date(whenIso);
+    const datePart = new Intl.DateTimeFormat("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      timeZone: tz,
+    }).format(d);
+    const timePart = new Intl.DateTimeFormat("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: tz,
+    }).format(d);
+    return `${datePart} at ${timePart} (${tz})`;
+  } catch {
+    return whenIso;
+  }
+}
+
+async function sendAppointmentEmail(site, lead) {
+  try {
+    // Need email + a booked appointment for this lead
+    if (!lead?.email) return;
+
+    const { data: appt, error: apptErr } = await supabase
+      .from("mm_agent_appointments")
+      .select("start_utc, tz, duration_min")
+      .eq("lead_id", lead.id)
+      .order("start_utc", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (apptErr) {
+      console.error("[ThankYou] load appointment error", apptErr);
+      return;
+    }
+    if (!appt) {
+      // No appointment found (should be rare if we just booked)
+      return;
+    }
+
+    const tz = appt.tz || "America/Chicago";
+    const durationMin = appt.duration_min ?? 30;
+    const when = formatApptForEmail(appt.start_utc, tz);
+
+    const agentName = site?.about_name || "Your Agent";
+    const siteName = site?.site_name || "Momentum Financial";
+
+    const safeAgent = escapeHtml(agentName);
+    const safeLead = escapeHtml(lead.full_name || "there");
+    const safeWhen = escapeHtml(when);
+
+    const html = `
+      <h2 style="margin:0 0 8px;">You're booked with ${safeAgent}</h2>
+      <p style="margin:0 0 12px;color:#555">Thanks for scheduling—here are the details.</p>
+      <p style="margin:0 0 6px;"><strong>When:</strong> ${safeWhen} (${durationMin} min)</p>
+      <p style="margin:0 0 6px;"><strong>Where:</strong> Phone call — ${safeAgent}'s team will call you at the number you provided.</p>
+      <p style="margin-top:16px;color:#777;font-size:13px;">
+        If you need anything before the call, just reply to this email.
+      </p>`;
+
+    const text = `You're booked with ${agentName}
+When: ${when} (${durationMin} min)
+Where: Phone call — ${agentName}'s team will call you at the number you provided.
+
+If you need anything before the call, just reply to this email.`;
+
+    await fetch(`${SITE_URL}/.netlify/functions/send-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        to: lead.email,
+        subject: `Your call with ${agentName} – ${when}`,
+        html,
+        text,
+        fromName: `${agentName} | ${siteName}`,
+      }),
+    });
+  } catch (e) {
+    console.error("[ThankYou] sendAppointmentEmail error", e);
+  }
 }
 
 async function finalizeAndNotify(site, lead) {
