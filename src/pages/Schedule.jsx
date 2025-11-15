@@ -94,11 +94,34 @@ async function computeSlotsForAgent(agentSiteId) {
     }
   }
 
+  // 🔹 Normalize weekly keys so "Mon", "monday" etc all work
+  const normalizedWeekly = {};
+  for (const [key, value] of Object.entries(weekly)) {
+    const k = String(key).toLowerCase();
+    let short;
+    if (k.startsWith("sun")) short = "sun";
+    else if (k.startsWith("mon")) short = "mon";
+    else if (k.startsWith("tue")) short = "tue";
+    else if (k.startsWith("wed")) short = "wed";
+    else if (k.startsWith("thu")) short = "thu";
+    else if (k.startsWith("fri")) short = "fri";
+    else if (k.startsWith("sat")) short = "sat";
+    else continue;
+    normalizedWeekly[short] = value;
+  }
+  weekly = normalizedWeekly;
+
   const nowUtc = new Date();
-  const startWindowUtc = new Date(nowUtc.getTime() + minLeadH * 3600 * 1000);
-  const endWindowUtc = new Date(
+
+  // 🔹 Defensive: make sure window isn't "inverted"
+  let startWindowUtc = new Date(nowUtc.getTime() + minLeadH * 3600 * 1000);
+  let endWindowUtc = new Date(
     nowUtc.getTime() + windowDays * 24 * 3600 * 1000
   );
+  if (startWindowUtc > endWindowUtc) {
+    // If min_lead_hours is bigger than the window, fall back to "start now"
+    startWindowUtc = nowUtc;
+  }
 
   const overlaps = (aStart, aEnd, bStart, bEnd) =>
     aStart < bEnd && bStart < aEnd;
