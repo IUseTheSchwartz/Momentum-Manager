@@ -197,6 +197,7 @@ export default function Schedule() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const leadId = searchParams.get("lead_id");
+  const slugParam = searchParams.get("slug") || "";
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -207,72 +208,117 @@ export default function Schedule() {
 
   // Load lead + agent site + availability
   useEffect(() => {
+    let cancelled = false;
+
     async function load() {
-      if (!leadId) {
-        setErr(
-          "We couldn’t find your application. Please return to the main page and start again."
-        );
-        setLoading(false);
-        return;
-      }
+      setLoading(true);
+      setErr("");
+      let resolvedLead = null;
+      let resolvedSite = null;
 
       try {
-        // 1) lead row (ties us to an agent_site_id)
-        const { data: leadRow, error: leadErr } = await supabase
-          .from("mm_agent_leads")
-          .select("id, full_name, email, phone, agent_site_id")
-          .eq("id", leadId)
-          .maybeSingle();
+        // 1) Try to load lead (normal case)
+        if (leadId) {
+          const { data: leadRow, error: leadErr } = await supabase
+            .from("mm_agent_leads")
+            .select("id, full_name, email, phone, agent_site_id")
+            .eq("id", leadId)
+            .maybeSingle();
 
-        if (leadErr || !leadRow) {
-          console.error("mm_agent_leads error:", leadErr);
-          setErr(
-            "We couldn’t find your application. Please return to the main page and start again."
-          );
-          setLoading(false);
-          return;
+          if (!cancelled) {
+            if (leadErr || !leadRow) {
+              console.error("mm_agent_leads error:", leadErr);
+              setErr(
+                "We couldn’t find your application. Please return to the main page and start again."
+              );
+            } else {
+              resolvedLead = leadRow;
+              setLead(leadRow);
+            }
+          }
+        } else {
+          if (!cancelled) {
+            setErr(
+              "We couldn’t find your application. Please return to the main page and start again."
+            );
+          }
         }
 
-        setLead(leadRow);
+        // 2) If we have a lead, load its site
+        if (resolvedLead && !cancelled) {
+          const { data: siteRow, error: siteErr } = await supabase
+            .from("mm_agent_sites")
+            .select("*")
+            .eq("id", resolvedLead.agent_site_id)
+            .maybeSingle();
 
-        // 2) site row for branding, name, slug
-        const { data: siteRow, error: siteErr } = await supabase
-          .from("mm_agent_sites")
-          .select("*")
-          .eq("id", leadRow.agent_site_id)
-          .maybeSingle();
-
-        if (siteErr || !siteRow) {
-          console.error("mm_agent_sites error:", siteErr);
-          setErr(
-            "We found your application, but this recruiting site is missing some settings."
-          );
-          setLoading(false);
-          return;
+          if (!cancelled) {
+            if (siteErr || !siteRow) {
+              console.error("mm_agent_sites error:", siteErr);
+              setErr(
+                "We found your application, but this recruiting site is missing some settings."
+              );
+            } else {
+              resolvedSite = siteRow;
+              setSite(siteRow);
+            }
+          }
         }
 
-        setSite(siteRow);
+        // 3) Fallback: if no site yet, try by slug param (so header can still show agent)
+        if (!resolvedSite && slugParam && !cancelled) {
+          const { data: slugSite, error: slugErr } = await supabase
+            .from("mm_agent_sites")
+            .select("*")
+            .eq("slug", slugParam)
+            .eq("is_active", true)
+            .maybeSingle();
 
-        // 3) availability slots for THIS agent site
-        const slotList = await computeSlotsForAgent(siteRow.id);
-        setSlots(slotList);
-        setLoading(false);
+          if (!cancelled) {
+            if (slugErr) {
+              console.error("mm_agent_sites slug fallback error:", slugErr);
+            } else if (slugSite) {
+              resolvedSite = slugSite;
+              setSite(slugSite);
+            }
+          }
+        }
+
+        // 4) Only compute slots when we actually have a lead + site
+        if (resolvedLead && resolvedSite && !cancelled) {
+          const slotList = await computeSlotsForAgent(resolvedSite.id);
+          if (!cancelled) {
+            setSlots(slotList);
+          }
+        }
       } catch (e) {
-        console.error(e);
-        setErr("Something went wrong loading your booking step.");
-        setLoading(false);
+        if (!cancelled) {
+          console.error(e);
+          setErr("Something went wrong loading your booking step.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
     load();
-  }, [leadId]);
+    return () => {
+      cancelled = true;
+    };
+  }, [leadId, slugParam]);
 
   // 👉 Derived header bits
   const siteName = site?.site_name || "Momentum Financial";
-  const slugName = humanizeSlug(site?.slug);
+  const slugName = humanizeSlug(site?.slug || slugParam);
   // Use about_name if present, else prettified slug, else global fallback
   const pageOwner = site?.about_name || slugName || "Momentum Financial";
-  const homeHref = site?.slug ? `/${site.slug}` : "/";
+  const homeHref = site?.slug
+    ? `/${site.slug}`
+    : slugParam
+    ? `/${slugParam}`
+    : "/";
 
   async function handleBook(slt) {
     if (!leadId) {
@@ -322,7 +368,11 @@ export default function Schedule() {
         throw new Error(msg);
       }
 
-      navigate(`/thank-you?lead_id=${leadId}`);
+      const slugForThankYou = site?.slug || slugParam || "";
+      const slugQuery = slugForThankYou
+        ? `&slug=${encodeURIComponent(slugForThankYou)}`
+        : "";
+      navigate(`/thank-you?lead_id=${leadId}${slugQuery}`);
     } catch (e) {
       alert(e.message || "Could not book. Try another slot.");
     } finally {
