@@ -260,6 +260,8 @@ export default function Schedule() {
           return;
         }
 
+        console.log("[Schedule] loaded siteRow:", siteRow); // debug
+
         setSite(siteRow);
 
         const s = await computeSlotsForAgentSite(siteRow.id);
@@ -277,19 +279,23 @@ export default function Schedule() {
 
   const siteName = site?.site_name || "Momentum Financial";
 
-  // 🔹 Derive a nice fallback name from the slug if about_name is missing
+  // 🔹 Fallback: try about_name first, then humanized slug, then last-resort copy
   const slugName = (() => {
     if (!site?.slug) return "";
-    const raw = site.slug.replace(/^\//, "").split(/[/?#]/)[0];
+    const raw = `${site.slug}`.replace(/^\//, "").split(/[/?#]/)[0];
     return raw
       .split("-")
-      .map((part) => (part ? part[0].toUpperCase() + part.slice(1) : ""))
+      .map((part) =>
+        part ? part[0].toUpperCase() + part.slice(1).toLowerCase() : ""
+      )
       .join(" ")
       .trim();
   })();
 
   const pageOwner =
-    (site?.about_name || "").trim() || slugName || "Your Mentor";
+    (typeof site?.about_name === "string" && site.about_name.trim()) ||
+    slugName ||
+    "Your Mentor";
 
   const homeHref = site?.slug ? `/${site.slug}` : "/";
 
