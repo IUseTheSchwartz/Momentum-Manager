@@ -7,7 +7,7 @@ function Skeleton({ className = "" }) {
   return <div className={`animate-pulse rounded-md bg-white/10 ${className}`} />;
 }
 
-/* -------------------- small helpers ------------------ */
+/* -------------------- Timezone helpers -------------------- */
 function tzOffsetMinutes(instant, tz) {
   const asTz = new Date(instant.toLocaleString("en-US", { timeZone: tz }));
   const asUtc = new Date(instant.toLocaleString("en-US", { timeZone: "UTC" }));
@@ -43,36 +43,33 @@ function prettyInTz(utcISO, tz = "America/Chicago") {
   return `${day}, ${mon} ${date} · ${time}`;
 }
 
+/* -------------------- Humanize slug → name fallback -------------------- */
 function humanizeSlug(slug) {
   if (!slug) return "";
-  return slug
-    .split("/")
-    .pop()
+  return String(slug)
     .split("-")
     .filter(Boolean)
-    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
 }
 
-/* --------------------------- computeSlots per agent site --------------------------- */
-
-async function computeSlotsForAgentSite(agentSiteId) {
+/* -------------------- Compute slots for THIS agent site -------------------- */
+async function computeSlotsForAgent(agentSiteId) {
   if (!agentSiteId) return [];
 
   const { data: av, error: avErr } = await supabase
     .from("mm_agent_availability")
     .select("*")
     .eq("agent_site_id", agentSiteId)
+    .order("updated_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (avErr) {
-    console.error("[Schedule] availability error:", avErr);
+    console.error("mm_agent_availability error:", avErr);
     return [];
   }
-  if (!av) {
-    console.warn("[Schedule] no availability row for agent_site_id", agentSiteId);
-    return [];
-  }
+  if (!av) return [];
 
   const tz = av.tz || "America/Chicago";
   const slotMin = av.slot_minutes ?? 30;
@@ -89,32 +86,19 @@ async function computeSlotsForAgentSite(agentSiteId) {
     }
   }
 
-  const { data: taken, error: takenErr } = await supabase
-    .from("mf_appointments")
-    .select("start_utc, end_utc, status, agent_site_id")
-    .eq("agent_site_id", agentSiteId)
-    .in("status", ["booked", "rescheduled", "scheduled"]);
-
-  if (takenErr) {
-    console.error("[Schedule] appointments error:", takenErr);
-  }
-
-  const { data: blackouts, error: boErr } = await supabase
-    .from("mf_blackouts")
-    .select("*");
-
-  if (boErr) {
-    console.error("[Schedule] blackouts error:", boErr);
-  }
-
-  const overlaps = (aStart, aEnd, bStart, bEnd) =>
-    aStart < bEnd && bStart < aEnd;
-
   const nowUtc = new Date();
   const startWindowUtc = new Date(nowUtc.getTime() + minLeadH * 3600 * 1000);
   const endWindowUtc = new Date(
     nowUtc.getTime() + windowDays * 24 * 3600 * 1000
   );
+
+  const overlaps = (aStart, aEnd, bStart, bEnd) =>
+    aStart < bEnd && bStart < aEnd;
+
+  // NOTE: for now we are NOT checking taken / blackout tables per agent.
+  // We'll wire that later; these are always false so buttons stay enabled.
+  const taken = [];
+  const blackouts = [];
 
   const out = [];
   let cursorUtc = startWindowUtc;
@@ -137,7 +121,6 @@ async function computeSlotsForAgentSite(agentSiteId) {
         zonedDateTimeToUTCISO({ y, m, d, hh: 12, mm: 0, tz })
       ).getUTCDay()
     ];
-
     const ranges = weekly[dow] || [];
 
     for (const [startStr, endStr] of ranges) {
@@ -158,7 +141,7 @@ async function computeSlotsForAgentSite(agentSiteId) {
         );
 
         if (withBufEndUtc <= rangeEndUtc && slotStartUtc >= startWindowUtc) {
-          const isTaken = (taken || []).some((t) =>
+          const isTaken = taken.some((t) =>
             overlaps(
               slotStartUtc,
               withBufEndUtc,
@@ -166,7 +149,7 @@ async function computeSlotsForAgentSite(agentSiteId) {
               new Date(t.end_utc)
             )
           );
-          const isBlocked = (blackouts || []).some((b) =>
+          const isBlocked = blackouts.some((b) =>
             overlaps(
               slotStartUtc,
               withBufEndUtc,
@@ -208,7 +191,7 @@ async function computeSlotsForAgentSite(agentSiteId) {
   return out.slice(0, 120);
 }
 
-/* -------------------------------- Component -------------------------------- */
+/* -------------------- Component -------------------- */
 
 export default function Schedule() {
   const navigate = useNavigate();
@@ -216,18 +199,13 @@ export default function Schedule() {
   const leadId = searchParams.get("lead_id");
 
   const [loading, setLoading] = useState(true);
-  const [slots, setSlots] = useState([]);
-  const [booking, setBooking] = useState(false);
   const [err, setErr] = useState("");
   const [lead, setLead] = useState(null);
   const [site, setSite] = useState(null);
+  const [slots, setSlots] = useState([]);
+  const [booking, setBooking] = useState(false);
 
-  useEffect(() => {
-    if (window.fbq) {
-      window.fbq("track", "Lead");
-    }
-  }, []);
-
+  // Load lead + agent site + availability
   useEffect(() => {
     async function load() {
       if (!leadId) {
@@ -239,6 +217,7 @@ export default function Schedule() {
       }
 
       try {
+        // 1) lead row (ties us to an agent_site_id)
         const { data: leadRow, error: leadErr } = await supabase
           .from("mm_agent_leads")
           .select("id, full_name, email, phone, agent_site_id")
@@ -246,7 +225,7 @@ export default function Schedule() {
           .maybeSingle();
 
         if (leadErr || !leadRow) {
-          console.error("[Schedule] lead error:", leadErr);
+          console.error("mm_agent_leads error:", leadErr);
           setErr(
             "We couldn’t find your application. Please return to the main page and start again."
           );
@@ -256,6 +235,7 @@ export default function Schedule() {
 
         setLead(leadRow);
 
+        // 2) site row for branding, name, slug
         const { data: siteRow, error: siteErr } = await supabase
           .from("mm_agent_sites")
           .select("*")
@@ -263,7 +243,7 @@ export default function Schedule() {
           .maybeSingle();
 
         if (siteErr || !siteRow) {
-          console.error("[Schedule] site error:", siteErr);
+          console.error("mm_agent_sites error:", siteErr);
           setErr(
             "We found your application, but this recruiting site is missing some settings."
           );
@@ -273,11 +253,12 @@ export default function Schedule() {
 
         setSite(siteRow);
 
-        const s = await computeSlotsForAgentSite(siteRow.id);
-        setSlots(s);
+        // 3) availability slots for THIS agent site
+        const slotList = await computeSlotsForAgent(siteRow.id);
+        setSlots(slotList);
         setLoading(false);
       } catch (e) {
-        console.error("[Schedule] load error:", e);
+        console.error(e);
         setErr("Something went wrong loading your booking step.");
         setLoading(false);
       }
@@ -286,22 +267,30 @@ export default function Schedule() {
     load();
   }, [leadId]);
 
+  // 👉 Derived header bits
   const siteName = site?.site_name || "Momentum Financial";
   const slugName = humanizeSlug(site?.slug);
-  // 🔹 Use about_name if present, else derive from slug, else final fallback
+  // Use about_name if present, else prettified slug, else global fallback
   const pageOwner = site?.about_name || slugName || "Momentum Financial";
   const homeHref = site?.slug ? `/${site.slug}` : "/";
 
   async function handleBook(slt) {
-    if (!leadId || !site) return;
+    if (!leadId) {
+      alert(
+        "We couldn't find your application. Please return to the main page and start again."
+      );
+      return;
+    }
 
     try {
       setBooking(true);
 
+      // For now we reuse global availability settings for duration + tz
       const { data: av } = await supabase
-        .from("mm_agent_availability")
+        .from("mf_availability")
         .select("*")
-        .eq("agent_site_id", site.id)
+        .order("updated_at", { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       const tz = av?.tz || "America/Chicago";
@@ -312,7 +301,6 @@ export default function Schedule() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           lead_id: leadId,
-          agent_site_id: site.id,
           start_utc: slt.startUtc,
           duration_min: durationMin,
           tz,
@@ -326,9 +314,11 @@ export default function Schedule() {
           const j = JSON.parse(txt);
           if (j?.error) msg = j.error;
         } catch {
-          //
+          // ignore
         }
-        if (res.status === 409) msg = "That slot was just taken. Pick another.";
+        if (res.status === 409) {
+          msg = "That slot was just taken. Pick another.";
+        }
         throw new Error(msg);
       }
 
@@ -342,14 +332,17 @@ export default function Schedule() {
 
   return (
     <div className="min-h-screen bg-[#1e1f22] text-white">
+      {/* Header: logo + "Agent Name | Momentum Financial" */}
       <header className="mx-auto max-w-6xl px-4 py-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           {loading ? (
             <Skeleton className="h-9 w-32 rounded" />
-          ) : site?.logo_url ? (
-            <img src={site.logo_url} alt={siteName} className="h-9" />
           ) : (
-            <img src="/logo.png" alt="Momentum Manager" className="h-9" />
+            <img
+              src={site?.logo_url || "/logo.png"}
+              alt={siteName}
+              className="h-9 w-auto"
+            />
           )}
           <span className="text-white/60 text-sm">
             {loading ? (
@@ -371,35 +364,37 @@ export default function Schedule() {
       </header>
 
       <main className="mx-auto max-w-6xl px-4 pb-24">
-        <h1 className="text-2xl sm:text-3xl font-bold mb-2">Pick a time</h1>
-        <p className="text-white/70 mb-6">
-          Choose a time that works best for you. You’ll get a confirmation with
-          all the details.
-        </p>
-
-        {err && !loading && (
+        {loading ? (
+          <div className="grid gap-3">
+            <Skeleton className="h-7 w-40" />
+            <Skeleton className="h-4 w-72" />
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-80">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="h-20 w-full rounded-lg" />
+              ))}
+            </div>
+          </div>
+        ) : err ? (
           <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm">
             {err}
           </div>
-        )}
-
-        {loading && !err && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-80">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-20 w-full rounded-lg" />
-            ))}
-          </div>
-        )}
-
-        {!loading && !err && (
+        ) : (
           <>
+            <h1 className="text-2xl sm:text-3xl font-bold mb-2">
+              Pick a time
+            </h1>
+            <p className="text-white/70 mb-6 text-sm sm:text-base">
+              Choose a time that works best for you. You’ll get a confirmation
+              with all the details.
+            </p>
+
             {!slots.length ? (
-              <div className="text-white/70">
+              <div className="text-white/70 text-sm">
                 No slots available right now. Please check back later or reach
                 out directly.
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-80 overflow-auto">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-80 overflow-auto">
                 {slots.map((slt) => {
                   const disabled = slt.isTaken || slt.isBlocked || booking;
                   return (
