@@ -37,6 +37,7 @@ export default function AgentSettings() {
       setLoading(true);
       setError(null);
 
+      // 1) get current user from Supabase auth
       const {
         data: { user },
         error: userErr,
@@ -51,6 +52,7 @@ export default function AgentSettings() {
         return;
       }
 
+      // 2) Try to find an existing site for this user
       const { data: existing, error: selErr } = await supabase
         .from("mm_agent_sites")
         .select("*")
@@ -68,6 +70,7 @@ export default function AgentSettings() {
 
       let siteRow = existing;
 
+      // 3) If none, create with defaults
       if (!siteRow) {
         const defaultName =
           user.user_metadata?.full_name ||
@@ -86,7 +89,7 @@ export default function AgentSettings() {
             hero_title:
               "Build a high-ticket sales career with Momentum Financial",
             hero_sub: "High expectations. High results. Real mentorship.",
-            hero_youtube_url: DEFAULT_INTRO_VIDEO_URL,
+            hero_youtube_url: DEFAULT_INTRO_VIDEO_URL, // default to Logan intro video
             notification_emails: user.email || "",
             is_active: true,
             show_proof: true,
@@ -108,12 +111,16 @@ export default function AgentSettings() {
 
       setSite(siteRow);
 
+      // hydrate form state
       setNotificationEmails(siteRow.notification_emails || "");
       setHeroTitle(siteRow.hero_title || "");
       setHeroSub(siteRow.hero_sub || "");
       setAboutName(siteRow.about_name || "");
       setAboutBio(siteRow.about_bio || "");
-      setHeroYoutubeUrl(siteRow.hero_youtube_url || DEFAULT_INTRO_VIDEO_URL);
+      // if no custom video set, default to Logan intro
+      setHeroYoutubeUrl(
+        siteRow.hero_youtube_url || DEFAULT_INTRO_VIDEO_URL
+      );
       setSocialYoutube(siteRow.social_youtube_url || "");
       setSocialInstagram(siteRow.social_instagram_url || "");
       setSocialSnapchat(siteRow.social_snapchat_url || "");
@@ -132,7 +139,7 @@ export default function AgentSettings() {
     setHeadshotFile(file);
   }
 
-  // Live slug preview: recompute from name, fall back to existing slug
+  // 🔹 Preview slug is always based on the *current* name
   const slug = useMemo(() => {
     const fromName = slugFromName(aboutName);
     if (fromName) return fromName;
@@ -150,14 +157,14 @@ export default function AgentSettings() {
     setError(null);
 
     try {
-      // Slug we want to persist (follows the preview)
+      // Compute slug we want to save (matches preview behavior, but with a hard fallback)
       const newSlug =
         slugFromName(aboutName) ||
         site.slug ||
-        `agent-${String(site.agent_user_id || "").slice(0, 8)}`;
+        `agent-${(site.id || "").slice(0, 8)}`;
 
+      // TODO: later wire real headshot upload to Storage; for now we ignore headshotFile
       const updates = {
-        slug: newSlug,
         notification_emails: notificationEmails,
         hero_title: heroTitle,
         hero_sub: heroSub,
@@ -167,6 +174,7 @@ export default function AgentSettings() {
         social_youtube_url: socialYoutube,
         social_instagram_url: socialInstagram,
         social_snapchat_url: socialSnapchat,
+        slug: newSlug, // ✅ persist slug in Supabase
         updated_at: new Date().toISOString(),
       };
 
@@ -298,7 +306,7 @@ export default function AgentSettings() {
               value={aboutName}
               onChange={(e) => setAboutName(e.target.value)}
             />
-            <p className="text-xs text-white/50">
+            <p className="text-xs text:white/50">
               Your site will display as{" "}
               <span className="font-semibold">{previewSiteName}</span> in the
               browser title.
@@ -321,7 +329,7 @@ export default function AgentSettings() {
           </div>
           <div className="md:col-span-2 space-y-1">
             <input
-              className="w-full p-3 rounded bg-white/5 border border-white/10 text-sm"
+              className="w-full p-3 rounded bg:white/5 border border:white/10 text-sm"
               placeholder="https://www.youtube.com/watch?v=..."
               value={heroYoutubeUrl}
               onChange={(e) => setHeroYoutubeUrl(e.target.value)}
@@ -376,9 +384,8 @@ export default function AgentSettings() {
           value={siteUrl}
         />
         <p className="text-xs text-white/50">
-          This link is generated from your name and saved as your{" "}
-          <code>slug</code>. Updating your name and saving will update this
-          slug, so your public URL stays in sync.
+          This is where your public page will live. It&apos;s generated from
+          your name as <code>first-lastname</code> and stored as a slug.
         </p>
       </section>
 
