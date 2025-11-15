@@ -23,7 +23,7 @@ const supabase = createClient(supabaseUrl, serviceKey, {
   auth: { persistSession: false },
 });
 
-// -------- helpers (mirror Landing/Schedule logic) ----------
+// -------- helpers (mirror Schedule logic) ----------
 function tzOffsetMinutes(instant, tz) {
   const asTz = new Date(instant.toLocaleString("en-US", { timeZone: tz }));
   const asUtc = new Date(instant.toLocaleString("en-US", { timeZone: "UTC" }));
@@ -79,7 +79,7 @@ async function computeSlotsForAgentSite({
     .eq("agent_site_id", agentSiteId)
     .in("status", ["scheduled", "rescheduled"]);
 
-  // we don't have per-agent blackouts yet
+  // (no per-agent blackout table yet)
   const blackouts = [];
 
   const nowUtc = new Date();
@@ -196,6 +196,7 @@ exports.handler = async (event) => {
     const body = JSON.parse(event.body || "{}");
     const action = body.action;
 
+    // ------------- LOOKUP -------------
     if (action === "lookup") {
       const email = (body.email || "").trim().toLowerCase();
       const lead_id = body.lead_id || null;
@@ -263,8 +264,8 @@ exports.handler = async (event) => {
 
       const appt = apptList[0];
 
-      // 3) Load availability for this agent site
-      const { data: av, error: avErr } = await supabase
+      // 3) Load availability for this agent site (same pattern as Schedule)
+      const { data: av } = await supabase
         .from("mm_agent_availability")
         .select("*")
         .eq("agent_site_id", lead.agent_site_id)
@@ -272,24 +273,13 @@ exports.handler = async (event) => {
         .limit(1)
         .maybeSingle();
 
-      if (avErr || !av) {
-        return {
-          statusCode: 500,
-          body: JSON.stringify({
-            ok: false,
-            error:
-              "This agent hasn't set their availability yet. Please contact them directly.",
-          }),
-        };
-      }
+      const tz = av?.tz || appt.tz || "America/Chicago";
+      const slotMin = av?.slot_minutes ?? 30;
+      const buffer = av?.buffer_minutes ?? 15;
+      const minLeadH = av?.min_lead_hours ?? 12;
+      const windowDays = av?.booking_window_days ?? 14;
 
-      const tz = av.tz || appt.tz || "America/Chicago";
-      const slotMin = av.slot_minutes ?? 30;
-      const buffer = av.buffer_minutes ?? 15;
-      const minLeadH = av.min_lead_hours ?? 12;
-      const windowDays = av.booking_window_days ?? 14;
-
-      let weekly = av.weekly || {};
+      let weekly = av?.weekly || {};
       if (typeof weekly === "string") {
         try {
           weekly = JSON.parse(weekly);
@@ -320,6 +310,7 @@ exports.handler = async (event) => {
       };
     }
 
+    // ------------- RESCHEDULE -------------
     if (action === "reschedule") {
       const { appt_id, start_utc, lead_id } = body || {};
       if (!appt_id || !start_utc) {
@@ -369,12 +360,9 @@ exports.handler = async (event) => {
         .limit(1)
         .maybeSingle();
 
-      const tz =
-        av?.tz || appt.tz || "America/Chicago";
+      const tz = av?.tz || appt.tz || "America/Chicago";
       const durationMin =
-        appt.duration_min ||
-        av?.slot_minutes ||
-        30;
+        appt.duration_min || av?.slot_minutes || 30;
 
       const start = new Date(start_utc);
       if (Number.isNaN(start.getTime())) {
@@ -412,8 +400,7 @@ exports.handler = async (event) => {
         };
       }
 
-      // (Optional) You can trigger a fresh confirmation email here if you want,
-      // using the same template you used on initial booking.
+      // (Optional) trigger a fresh confirmation email here if you want.
 
       return {
         statusCode: 200,
