@@ -54,8 +54,16 @@ function humanizeSlug(slug) {
 }
 
 /* -------------------- Compute slots for THIS agent site -------------------- */
+/**
+ * Returns:
+ * {
+ *   slots: [{ startUtc, endUtc, labelLocal, labelTz, isTaken, isBlocked }],
+ *   tz: string,
+ *   slotMin: number
+ * }
+ */
 async function computeSlotsForAgent(agentSiteId) {
-  if (!agentSiteId) return [];
+  if (!agentSiteId) return { slots: [], tz: "America/Chicago", slotMin: 30 };
 
   const { data: av, error: avErr } = await supabase
     .from("mm_agent_availability")
@@ -67,9 +75,9 @@ async function computeSlotsForAgent(agentSiteId) {
 
   if (avErr) {
     console.error("mm_agent_availability error:", avErr);
-    return [];
+    return { slots: [], tz: "America/Chicago", slotMin: 30 };
   }
-  if (!av) return [];
+  if (!av) return { slots: [], tz: "America/Chicago", slotMin: 30 };
 
   const tz = av.tz || "America/Chicago";
   const slotMin = av.slot_minutes ?? 30;
@@ -188,7 +196,11 @@ async function computeSlotsForAgent(agentSiteId) {
     cursorUtc = new Date(nextNoonUtcISO);
   }
 
-  return out.slice(0, 120);
+  return {
+    slots: out.slice(0, 120),
+    tz,
+    slotMin,
+  };
 }
 
 /* -------------------- Component -------------------- */
@@ -205,6 +217,12 @@ export default function Schedule() {
   const [site, setSite] = useState(null);
   const [slots, setSlots] = useState([]);
   const [booking, setBooking] = useState(false);
+
+  // meta about the slots (tz + duration) so booking matches availability
+  const [slotMeta, setSlotMeta] = useState({
+    tz: "America/Chicago",
+    durationMin: 30,
+  });
 
   // Load lead + agent site + availability
   useEffect(() => {
@@ -286,9 +304,15 @@ export default function Schedule() {
 
         // 4) Only compute slots when we actually have a lead + site
         if (resolvedLead && resolvedSite && !cancelled) {
-          const slotList = await computeSlotsForAgent(resolvedSite.id);
+          const { slots: slotList, tz, slotMin } = await computeSlotsForAgent(
+            resolvedSite.id
+          );
           if (!cancelled) {
             setSlots(slotList);
+            setSlotMeta({
+              tz,
+              durationMin: slotMin ?? 30,
+            });
           }
         }
       } catch (e) {
@@ -331,16 +355,9 @@ export default function Schedule() {
     try {
       setBooking(true);
 
-      // For now we reuse global availability settings for duration + tz
-      const { data: av } = await supabase
-        .from("mf_availability")
-        .select("*")
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      const tz = av?.tz || "America/Chicago";
-      const durationMin = av?.slot_minutes ?? 30;
+      // Use the SAME tz + duration we used when generating slots
+      const tz = slotMeta.tz || "America/Chicago";
+      const durationMin = slotMeta.durationMin ?? 30;
 
       const res = await fetch("/.netlify/functions/appointment-create", {
         method: "POST",
@@ -350,6 +367,7 @@ export default function Schedule() {
           start_utc: slt.startUtc,
           duration_min: durationMin,
           tz,
+          agent_site_id: site?.id || null, // helpful for routing on the backend
         }),
       });
 
@@ -360,7 +378,7 @@ export default function Schedule() {
           const j = JSON.parse(txt);
           if (j?.error) msg = j.error;
         } catch {
-          // ignore
+          // ignore JSON parse issues
         }
         if (res.status === 409) {
           msg = "That slot was just taken. Pick another.";
