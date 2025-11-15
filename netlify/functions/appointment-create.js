@@ -1,15 +1,25 @@
 // File: netlify/functions/appointment-create.js
-import { createClient } from "@supabase/supabase-js";
+// CommonJS style so Netlify picks it up reliably.
+
+const { createClient } = require("@supabase/supabase-js");
 
 const supabaseUrl = process.env.SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseKey =
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
 
-// IMPORTANT: use service role key so inserts bypass RLS for this function
-const supabase = createClient(supabaseUrl, serviceRoleKey, {
+// Fail loudly if envs are missing
+if (!supabaseUrl || !supabaseKey) {
+  console.warn(
+    "[appointment-create] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY / SUPABASE_ANON_KEY"
+  );
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: { persistSession: false },
 });
 
-export const handler = async (event) => {
+exports.handler = async (event) => {
+  // ───────────────────────────────── METHOD GUARD ──────────────────────────────
   if (event.httpMethod !== "POST") {
     return {
       statusCode: 405,
@@ -17,10 +27,12 @@ export const handler = async (event) => {
     };
   }
 
+  // ───────────────────────────────── PARSE BODY ────────────────────────────────
   let payload;
   try {
     payload = JSON.parse(event.body || "{}");
-  } catch {
+  } catch (e) {
+    console.error("[appointment-create] JSON parse error:", e);
     return {
       statusCode: 400,
       body: JSON.stringify({ error: "Invalid JSON body" }),
@@ -38,7 +50,7 @@ export const handler = async (event) => {
     };
   }
 
-  // Parse and normalize start + end times
+  // ──────────────────────────────── TIME PARSING ───────────────────────────────
   const start = new Date(start_utc);
   if (Number.isNaN(start.getTime())) {
     return {
@@ -60,7 +72,7 @@ export const handler = async (event) => {
   const tzFinal = tz || "America/Chicago";
 
   try {
-    // 1) Verify the lead exists and belongs to the expected agent_site
+    // ─────────────────────────── VERIFY LEAD EXISTS ────────────────────────────
     const { data: lead, error: leadErr } = await supabase
       .from("mm_agent_leads")
       .select("id, agent_site_id")
@@ -68,11 +80,13 @@ export const handler = async (event) => {
       .maybeSingle();
 
     if (leadErr) {
-      console.error("mm_agent_leads error:", leadErr);
+      console.error("[appointment-create] mm_agent_leads error:", leadErr);
       return {
         statusCode: 500,
         body: JSON.stringify({
-          error: "We couldn't load your application. Please try again.",
+          error:
+            "We couldn't load your application. Please try again. (LEAD_ERR)",
+          detail: leadErr.message || leadErr,
         }),
       };
     }
@@ -81,24 +95,39 @@ export const handler = async (event) => {
       return {
         statusCode: 404,
         body: JSON.stringify({
-          error: "We couldn't find your application. Please start again.",
+          error:
+            "We couldn't find your application. Please start again. (LEAD_NOT_FOUND)",
         }),
       };
     }
 
-    // If the front-end sends agent_site_id, make sure it matches the lead
     const effectiveSiteId = agent_site_id || lead.agent_site_id;
-    if (agent_site_id && lead.agent_site_id && agent_site_id !== lead.agent_site_id) {
+
+    if (!effectiveSiteId) {
       return {
         statusCode: 400,
         body: JSON.stringify({
-          error: "That time slot is not available for this recruiting site.",
+          error:
+            "This recruiting site is missing some settings. Please contact the agent. (NO_SITE_ID)",
         }),
       };
     }
 
-    // 2) Optional: check for an existing appointment at the same time for this lead
-    //    This lets the UI show a clean "slot taken" message (409)
+    if (
+      agent_site_id &&
+      lead.agent_site_id &&
+      agent_site_id !== lead.agent_site_id
+    ) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({
+          error:
+            "That time slot is not available for this recruiting site. (SITE_MISMATCH)",
+        }),
+      };
+    }
+
+    // ───────────────────────────── CONFLICT CHECK ──────────────────────────────
     const { data: existingAppt, error: existingErr } = await supabase
       .from("mm_agent_appointments")
       .select("id, start_utc")
@@ -107,18 +136,21 @@ export const handler = async (event) => {
       .maybeSingle();
 
     if (existingErr) {
-      console.error("mm_agent_appointments conflict check error:", existingErr);
-      // Don't hard fail; just continue and try insert.
+      console.error(
+        "[appointment-create] appointments conflict check error:",
+        existingErr
+      );
+      // Don't hard fail here; keep going.
     } else if (existingAppt) {
       return {
         statusCode: 409,
         body: JSON.stringify({
-          error: "That slot was just taken. Pick another.",
+          error: "That slot was just taken. Pick another. (ALREADY_BOOKED)",
         }),
       };
     }
 
-    // 3) Insert the appointment
+    // ────────────────────────────── INSERT APPOINTMENT ─────────────────────────
     const { data: appt, error: apptErr } = await supabase
       .from("mm_agent_appointments")
       .insert({
@@ -131,23 +163,37 @@ export const handler = async (event) => {
         status: "scheduled",
       })
       .select("id")
-      .maybeSingle();
+      .single();
 
     if (apptErr) {
-      console.error("mm_agent_appointments insert error:", apptErr);
+      console.error("[appointment-create] insert error:", apptErr);
 
-      // If this is an RLS or unique constraint type situation, surface a friendly message
-      const msg =
-        apptErr.message && apptErr.message.includes("row-level security")
-          ? "We couldn't save your appointment due to a security rule. Please contact support."
-          : "Could not book. Try another slot.";
+      let msg = "Could not book. Try another slot. (APPT_ERR)";
+      if (
+        apptErr.message &&
+        apptErr.message.toLowerCase().includes("row-level security")
+      ) {
+        msg =
+          "We couldn't save your appointment due to a security rule. (RLS) Please contact support.";
+      } else if (
+        apptErr.message &&
+        apptErr.message.toLowerCase().includes("foreign key")
+      ) {
+        msg =
+          "We couldn't link your appointment correctly. (FK_ERR) Please contact the agent.";
+      }
 
       return {
         statusCode: 500,
-        body: JSON.stringify({ error: msg }),
+        body: JSON.stringify({
+          error: msg,
+          detail: apptErr.message || apptErr,
+          code: apptErr.code || null,
+        }),
       };
     }
 
+    // ───────────────────────────────── SUCCESS ─────────────────────────────────
     return {
       statusCode: 200,
       body: JSON.stringify({
@@ -156,11 +202,12 @@ export const handler = async (event) => {
       }),
     };
   } catch (e) {
-    console.error("Unexpected appointment-create error:", e);
+    console.error("[appointment-create] unexpected error:", e);
     return {
       statusCode: 500,
       body: JSON.stringify({
-        error: "Could not book. Try another slot.",
+        error: "Could not book. Try another slot. (UNEXPECTED)",
+        detail: e.message || String(e),
       }),
     };
   }
