@@ -73,6 +73,10 @@ export default function App() {
   const isSingleSegment = /^\/[^/]+$/.test(path);
   const isPublicAgentLanding = isSingleSegment && !knownPaths.has(path);
 
+  // Also treat booking flow shells as "public shell" pages with no app Nav
+  const PUBLIC_SHELL_PATHS = new Set(["/schedule", "/thank-you", "/reschedule"]);
+  const isPublicShell = isPublicAgentLanding || PUBLIC_SHELL_PATHS.has(path);
+
   const routes = (
     <Routes>
       {/* Public */}
@@ -126,11 +130,11 @@ export default function App() {
 
   return (
     <div className="min-h-screen">
-      {/* Hide Nav on public agent landing pages */}
-      {!isPublicAgentLanding && <Nav />}
+      {/* Hide Nav on public agent landing + booking shell pages */}
+      {!isPublicShell && <Nav />}
 
-      {/* For public agent pages, no container so the page can be full-bleed */}
-      {isPublicAgentLanding ? (
+      {/* Public shells render full-bleed; app pages use centered container */}
+      {isPublicShell ? (
         routes
       ) : (
         <div className="max-w-6xl mx-auto p-4">{routes}</div>
