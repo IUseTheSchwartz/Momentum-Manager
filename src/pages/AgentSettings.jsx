@@ -21,6 +21,7 @@ export default function AgentSettings() {
 
   const [headshotFile, setHeadshotFile] = useState(null);
   const [notificationEmails, setNotificationEmails] = useState("");
+  const [agentPhone, setAgentPhone] = useState("");          // 🔹 NEW
   const [heroTitle, setHeroTitle] = useState("");
   const [heroSub, setHeroSub] = useState("");
   const [aboutName, setAboutName] = useState("");
@@ -111,6 +112,7 @@ export default function AgentSettings() {
 
       // hydrate form state
       setNotificationEmails(siteRow.notification_emails || "");
+      setAgentPhone(siteRow.agent_phone || "");                          // 🔹 NEW
       setHeroTitle(siteRow.hero_title || "");
       setHeroSub(siteRow.hero_sub || "");
       setAboutName(siteRow.about_name || "");
@@ -159,6 +161,7 @@ export default function AgentSettings() {
 
       const updates = {
         notification_emails: notificationEmails,
+        agent_phone: agentPhone,                              // 🔹 NEW
         hero_title: heroTitle,
         hero_sub: heroSub,
         about_name: aboutName,
@@ -253,6 +256,26 @@ export default function AgentSettings() {
               placeholder="you@example.com, manager@example.com"
               value={notificationEmails}
               onChange={(e) => setNotificationEmails(e.target.value)}
+            />
+          </div>
+        </div>
+
+        {/* 🔹 Agent phone for emails/texts */}
+        <div className="grid gap-4 md:grid-cols-3 md:items-center">
+          <div className="text-sm text-white/70">
+            <div className="font-semibold mb-1">
+              Phone number for calls/texts
+            </div>
+            <p className="text-xs text-white/50">
+              This number will appear in client emails as the number to text or expect a call from.
+            </p>
+          </div>
+          <div className="md:col-span-2">
+            <input
+              className="w-full p-3 rounded bg-white/5 border border-white/10 text-sm"
+              placeholder="e.g. (555) 123-4567"
+              value={agentPhone}
+              onChange={(e) => setAgentPhone(e.target.value)}
             />
           </div>
         </div>
