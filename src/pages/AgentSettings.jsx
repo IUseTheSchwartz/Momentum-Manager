@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient.js";
 
 const DEFAULT_INTRO_VIDEO_URL = "https://www.youtube.com/watch?v=Co1LfteWE8I";
+const HEADSHOT_BUCKET = "mm_agent_assets"; // 🔹 change to your bucket name if different
 
 function slugFromName(name) {
   const trimmed = (name || "").trim().toLowerCase();
@@ -10,6 +11,68 @@ function slugFromName(name) {
   return trimmed
     .replace(/[^a-z0-9\s]/g, "")
     .replace(/\s+/g, "-");
+}
+
+// Normalize either a full URL or @handle into full URL
+function normalizeSocial(value, kind) {
+  const raw = (value || "").trim();
+  if (!raw) return "";
+
+  // Already a URL
+  if (raw.startsWith("http://") || raw.startsWith("https://")) {
+    return raw;
+  }
+
+  const handle = raw.startsWith("@") ? raw.slice(1) : raw;
+
+  switch (kind) {
+    case "youtube":
+      // YouTube handle style
+      return `https://youtube.com/@${handle}`;
+    case "instagram":
+      return `https://instagram.com/${handle}`;
+    case "snapchat":
+      return `https://snapchat.com/add/${handle}`;
+    default:
+      return raw;
+  }
+}
+
+// Center square crop helper
+async function cropToSquare(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+
+    img.onload = () => {
+      const size = Math.min(img.width, img.height);
+      const sx = (img.width - size) / 2;
+      const sy = (img.height - size) / 2;
+
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, sx, sy, size, size, 0, 0, size, size);
+
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) return reject(new Error("Canvas empty"));
+          resolve(blob);
+        },
+        file.type || "image/jpeg",
+        0.9
+      );
+    };
+
+    img.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 export default function AgentSettings() {
@@ -20,8 +83,11 @@ export default function AgentSettings() {
   const [error, setError] = useState(null);
 
   const [headshotFile, setHeadshotFile] = useState(null);
+  const [headshotPreview, setHeadshotPreview] = useState("");
+  const [headshotError, setHeadshotError] = useState("");
+
   const [notificationEmails, setNotificationEmails] = useState("");
-  const [agentPhone, setAgentPhone] = useState(""); // 🔹 NEW
+  const [agentPhone, setAgentPhone] = useState("");
   const [heroTitle, setHeroTitle] = useState("");
   const [heroSub, setHeroSub] = useState("");
   const [aboutName, setAboutName] = useState("");
@@ -112,7 +178,7 @@ export default function AgentSettings() {
 
       // hydrate form state
       setNotificationEmails(siteRow.notification_emails || "");
-      setAgentPhone(siteRow.agent_phone || ""); // 🔹 NEW
+      setAgentPhone(siteRow.agent_phone || "");
       setHeroTitle(siteRow.hero_title || "");
       setHeroSub(siteRow.hero_sub || "");
       setAboutName(siteRow.about_name || "");
@@ -123,6 +189,7 @@ export default function AgentSettings() {
       setSocialYoutube(siteRow.social_youtube_url || "");
       setSocialInstagram(siteRow.social_instagram_url || "");
       setSocialSnapchat(siteRow.social_snapchat_url || "");
+      setHeadshotPreview(siteRow.headshot_url || "");
       setLoading(false);
     }
 
@@ -135,10 +202,17 @@ export default function AgentSettings() {
 
   function handleHeadshotChange(e) {
     const file = e.target.files?.[0] || null;
+    setHeadshotError("");
     setHeadshotFile(file);
+    if (file) {
+      const url = URL.createObjectURL(file);
+      setHeadshotPreview(url);
+    } else {
+      setHeadshotPreview(site?.headshot_url || "");
+    }
   }
 
-  // 🔹 Slug preview: prefer name-derived slug, fall back to existing site slug
+  // Slug preview: prefer name-derived slug, fall back to existing site slug
   const slug = useMemo(() => {
     const fromName = slugFromName(aboutName);
     if (fromName) return fromName;
@@ -151,6 +225,40 @@ export default function AgentSettings() {
     aboutName || site?.about_name || "Your Name"
   } | Momentum Financial`;
 
+  async function uploadHeadshotIfNeeded(currentSite) {
+    if (!headshotFile || !currentSite) return currentSite.headshot_url || "";
+
+    try {
+      const croppedBlob = await cropToSquare(headshotFile);
+      const ext =
+        headshotFile.name.split(".").pop()?.toLowerCase() || "jpg";
+      const path = `headshots/${currentSite.id}-${Date.now()}.${ext}`;
+
+      const { data: uploadData, error: uploadErr } = await supabase.storage
+        .from(HEADSHOT_BUCKET)
+        .upload(path, croppedBlob, {
+          contentType: headshotFile.type || "image/jpeg",
+          upsert: true,
+        });
+
+      if (uploadErr) {
+        console.error("[AgentSettings] headshot upload error", uploadErr);
+        setHeadshotError("Failed to upload headshot.");
+        return currentSite.headshot_url || "";
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from(HEADSHOT_BUCKET)
+        .getPublicUrl(uploadData.path);
+
+      return publicUrlData.publicUrl || currentSite.headshot_url || "";
+    } catch (e) {
+      console.error("[AgentSettings] crop/upload error", e);
+      setHeadshotError("Failed to process headshot.");
+      return currentSite.headshot_url || "";
+    }
+  }
+
   async function submit(e) {
     e.preventDefault();
     if (!site) return;
@@ -158,22 +266,35 @@ export default function AgentSettings() {
     setError(null);
 
     try {
-      // headshot upload ignored for now
-
-      // 🔹 New slug we will actually save
+      // New slug we will actually save
       const newSlug = slugFromName(aboutName) || site.slug || slug;
+
+      // Normalize socials from URL or @handle
+      const normalizedYoutube = normalizeSocial(socialYoutube, "youtube");
+      const normalizedInstagram = normalizeSocial(
+        socialInstagram,
+        "instagram"
+      );
+      const normalizedSnapchat = normalizeSocial(
+        socialSnapchat,
+        "snapchat"
+      );
+
+      // Upload headshot (cropped) if needed
+      const headshotUrl = await uploadHeadshotIfNeeded(site);
 
       const updates = {
         notification_emails: notificationEmails,
-        agent_phone: agentPhone, // 🔹 NEW
+        agent_phone: agentPhone,
         hero_title: heroTitle,
         hero_sub: heroSub,
         about_name: aboutName,
         about_bio: aboutBio,
         hero_youtube_url: heroYoutubeUrl,
-        social_youtube_url: socialYoutube,
-        social_instagram_url: socialInstagram,
-        social_snapchat_url: socialSnapchat,
+        social_youtube_url: normalizedYoutube,
+        social_instagram_url: normalizedInstagram,
+        social_snapchat_url: normalizedSnapchat,
+        headshot_url: headshotUrl,
         slug: newSlug,
         updated_at: new Date().toISOString(),
       };
@@ -185,11 +306,10 @@ export default function AgentSettings() {
         .select("*")
         .single();
 
-      if (upErr) {
-        throw upErr;
-      }
+      if (upErr) throw upErr;
 
       setSite(data);
+      setHeadshotPreview(data.headshot_url || headshotPreview);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
@@ -221,27 +341,48 @@ export default function AgentSettings() {
     <form onSubmit={submit} className="space-y-6">
       {/* Headshot + notifications */}
       <section className="space-y-4">
-        <div className="grid gap-4 md:grid-cols-3 md:items-center">
+        <div className="grid gap-4 md:grid-cols-3 md:items-start">
           <div className="text-sm text-white/70">
             <div className="font-semibold mb-1">
-              Headshot (crop &amp; upload)
+              Headshot (auto-cropped to square)
             </div>
             <p className="text-xs text-white/50">
-              We&apos;ll add proper cropping + hosting later.
+              Upload a clear front-facing photo. We&apos;ll crop it to a square
+              automatically.
             </p>
-          </div>
-          <div className="md:col-span-2">
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleHeadshotChange}
-              className="block w-full text-sm text-white/70 file:mr-3 file:py-2 file:px-4 file:rounded file:border-0 file:bg-white/10 file:text-white hover:file:bg-white/20"
-            />
-            {headshotFile && (
-              <p className="text-xs text-white/50 mt-1">
-                Selected: {headshotFile.name}
-              </p>
+            {headshotError && (
+              <p className="text-xs text-red-400 mt-1">{headshotError}</p>
             )}
+          </div>
+          <div className="md:col-span-2 space-y-3">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-full bg-white/5 overflow-hidden flex items-center justify-center">
+                {headshotPreview || site?.headshot_url ? (
+                  <img
+                    src={headshotPreview || site?.headshot_url}
+                    alt="Headshot preview"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className="text-[10px] text-white/40 text-center px-1">
+                    No headshot
+                  </span>
+                )}
+              </div>
+              <div className="flex-1">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleHeadshotChange}
+                  className="block w-full text-sm text-white/70 file:mr-3 file:py-2 file:px-4 file:rounded file:border-0 file:bg-white/10 file:text-white hover:file:bg-white/20"
+                />
+                {headshotFile && (
+                  <p className="text-xs text-white/50 mt-1">
+                    Selected: {headshotFile.name}
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -264,7 +405,7 @@ export default function AgentSettings() {
           </div>
         </div>
 
-        {/* 🔹 Agent phone for emails/texts */}
+        {/* Agent phone for emails/texts */}
         <div className="grid gap-4 md:grid-cols-3 md:items-center">
           <div className="text-sm text-white/70">
             <div className="font-semibold mb-1">
@@ -372,27 +513,27 @@ export default function AgentSettings() {
         <div className="grid gap-3">
           <input
             className="w-full p-3 rounded bg-white/5 border border-white/10 text-sm"
-            placeholder="YouTube URL"
+            placeholder="YouTube URL or @handle"
             value={socialYoutube}
             onChange={(e) => setSocialYoutube(e.target.value)}
           />
           <input
             className="w-full p-3 rounded bg-white/5 border border-white/10 text-sm"
-            placeholder="Instagram URL"
+            placeholder="Instagram URL or @handle"
             value={socialInstagram}
             onChange={(e) => setSocialInstagram(e.target.value)}
           />
           <input
             className="w-full p-3 rounded bg-white/5 border border-white/10 text-sm"
-            placeholder="Snapchat URL"
+            placeholder="Snapchat URL or @handle"
             value={socialSnapchat}
             onChange={(e) => setSocialSnapchat(e.target.value)}
           />
         </div>
 
         <p className="text-xs text-white/50">
-          Paste full links only. These will power the icon buttons on your
-          public landing page.
+          You can paste full links or just your @username. We&apos;ll save the
+          proper URLs for you.
         </p>
       </section>
 
