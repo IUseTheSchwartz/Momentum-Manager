@@ -48,7 +48,6 @@ function prettyInTz(utcISO, tz = "America/Chicago") {
 async function computeSlotsForAgentSite(agentSiteId) {
   if (!agentSiteId) return [];
 
-  // 1) Per-agent availability row
   const { data: av, error: avErr } = await supabase
     .from("mm_agent_availability")
     .select("*")
@@ -79,7 +78,6 @@ async function computeSlotsForAgentSite(agentSiteId) {
     }
   }
 
-  // 2) Existing appointments for THIS agent site
   const { data: taken, error: takenErr } = await supabase
     .from("mf_appointments")
     .select("start_utc, end_utc, status, agent_site_id")
@@ -90,7 +88,6 @@ async function computeSlotsForAgentSite(agentSiteId) {
     console.error("[Schedule] appointments error:", takenErr);
   }
 
-  // 3) Global blackouts (optional; shared)
   const { data: blackouts, error: boErr } = await supabase
     .from("mf_blackouts")
     .select("*");
@@ -214,7 +211,6 @@ export default function Schedule() {
   const [lead, setLead] = useState(null);
   const [site, setSite] = useState(null);
 
-  // Meta Pixel
   useEffect(() => {
     if (window.fbq) {
       window.fbq("track", "Lead");
@@ -232,7 +228,6 @@ export default function Schedule() {
       }
 
       try {
-        // 1) Lead
         const { data: leadRow, error: leadErr } = await supabase
           .from("mm_agent_leads")
           .select("id, full_name, email, phone, agent_site_id")
@@ -250,7 +245,6 @@ export default function Schedule() {
 
         setLead(leadRow);
 
-        // 2) Agent site for branding
         const { data: siteRow, error: siteErr } = await supabase
           .from("mm_agent_sites")
           .select("*")
@@ -268,7 +262,6 @@ export default function Schedule() {
 
         setSite(siteRow);
 
-        // 3) Slots from this agent's availability
         const s = await computeSlotsForAgentSite(siteRow.id);
         setSlots(s);
         setLoading(false);
@@ -283,11 +276,21 @@ export default function Schedule() {
   }, [leadId]);
 
   const siteName = site?.site_name || "Momentum Financial";
-  // 🔹 Always try to show the agent's name instead of "Your Mentor"
-  const pageOwner =
-    site?.about_name || site?.agent_name || siteName || "Momentum Financial";
 
-  // 🔹 Back link should always go to the agent's public landing page
+  // 🔹 Derive a nice fallback name from the slug if about_name is missing
+  const slugName = (() => {
+    if (!site?.slug) return "";
+    const raw = site.slug.replace(/^\//, "").split(/[/?#]/)[0];
+    return raw
+      .split("-")
+      .map((part) => (part ? part[0].toUpperCase() + part.slice(1) : ""))
+      .join(" ")
+      .trim();
+  })();
+
+  const pageOwner =
+    (site?.about_name || "").trim() || slugName || "Your Mentor";
+
   const homeHref = site?.slug ? `/${site.slug}` : "/";
 
   async function handleBook(slt) {
@@ -324,7 +327,7 @@ export default function Schedule() {
           const j = JSON.parse(txt);
           if (j?.error) msg = j.error;
         } catch {
-          // ignore JSON parse error
+          //
         }
         if (res.status === 409) msg = "That slot was just taken. Pick another.";
         throw new Error(msg);
@@ -340,7 +343,6 @@ export default function Schedule() {
 
   return (
     <div className="min-h-screen bg-[#1e1f22] text-white">
-      {/* Header with agent branding + logo */}
       <header className="mx-auto max-w-6xl px-4 py-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           {loading ? (
