@@ -7,7 +7,7 @@ function Skeleton({ className = "" }) {
   return <div className={`animate-pulse rounded-md bg-white/10 ${className}`} />;
 }
 
-/* -------------------- Timezone math helpers ------------------ */
+/* -------------------- small helpers ------------------ */
 function tzOffsetMinutes(instant, tz) {
   const asTz = new Date(instant.toLocaleString("en-US", { timeZone: tz }));
   const asUtc = new Date(instant.toLocaleString("en-US", { timeZone: "UTC" }));
@@ -41,6 +41,17 @@ function prettyInTz(utcISO, tz = "America/Chicago") {
     timeZone: tz,
   }).format(d);
   return `${day}, ${mon} ${date} · ${time}`;
+}
+
+function humanizeSlug(slug) {
+  if (!slug) return "";
+  return slug
+    .split("/")
+    .pop()
+    .split("-")
+    .filter(Boolean)
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join(" ");
 }
 
 /* --------------------------- computeSlots per agent site --------------------------- */
@@ -260,7 +271,6 @@ export default function Schedule() {
           return;
         }
 
-        console.log("[Schedule] loaded siteRow:", siteRow);
         setSite(siteRow);
 
         const s = await computeSlotsForAgentSite(siteRow.id);
@@ -277,8 +287,9 @@ export default function Schedule() {
   }, [leadId]);
 
   const siteName = site?.site_name || "Momentum Financial";
-  // 🔹 FORCE it to use about_name; no "Your Mentor" fallback
-  const pageOwner = site?.about_name || "Momentum Financial";
+  const slugName = humanizeSlug(site?.slug);
+  // 🔹 Use about_name if present, else derive from slug, else final fallback
+  const pageOwner = site?.about_name || slugName || "Momentum Financial";
   const homeHref = site?.slug ? `/${site.slug}` : "/";
 
   async function handleBook(slt) {
