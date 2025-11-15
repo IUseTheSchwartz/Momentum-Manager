@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient.js";
 
 const DEFAULT_INTRO_VIDEO_URL = "https://www.youtube.com/watch?v=Co1LfteWE8I";
-// 🔹 Make sure this matches your Supabase storage bucket name
+// Storage bucket for headshots
 const HEADSHOT_BUCKET = "mm_agent_assets";
 
 function slugFromName(name) {
@@ -196,7 +196,7 @@ export default function AgentSettings() {
         headshotFile.name.split(".").pop()?.toLowerCase() || "jpg";
       const path = `headshots/${currentSite.id}-${Date.now()}.${ext}`;
 
-      const { data: uploadData, error: uploadErr } = await supabase.storage
+      const { error: uploadErr } = await supabase.storage
         .from(HEADSHOT_BUCKET)
         .upload(path, headshotFile, {
           contentType: headshotFile.type || "image/jpeg",
@@ -206,24 +206,25 @@ export default function AgentSettings() {
       if (uploadErr) {
         console.error("[AgentSettings] headshot upload error", uploadErr);
         setHeadshotError("Failed to upload headshot.");
-        return currentSite.headshot_url || "";
+        throw uploadErr;
       }
 
+      // Use the path we just uploaded to (works in v1 + v2)
       const { data: publicUrlData } = supabase.storage
         .from(HEADSHOT_BUCKET)
-        .getPublicUrl(uploadData.path);
+        .getPublicUrl(path);
 
       const publicUrl = publicUrlData?.publicUrl || "";
       if (!publicUrl) {
         setHeadshotError("Failed to get headshot URL.");
-        return currentSite.headshot_url || "";
+        throw new Error("No public URL from Supabase");
       }
 
       return publicUrl;
     } catch (e) {
       console.error("[AgentSettings] upload error", e);
       setHeadshotError("Failed to process headshot.");
-      return currentSite.headshot_url || "";
+      throw e;
     }
   }
 
@@ -282,6 +283,7 @@ export default function AgentSettings() {
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
       console.error(err);
+      // If upload failed, error message may already be in headshotError
       setError("Failed to save settings.");
     } finally {
       setSaving(false);
@@ -403,7 +405,7 @@ export default function AgentSettings() {
           </div>
           <div className="md:col-span-2">
             <input
-              className="w-full p-3 rounded bg-white/5 border border-white/10 text-sm"
+              className="w-full p-3 rounded bg.white/5 border border-white/10 text-sm"
               placeholder="Build a high-ticket sales career"
               value={heroTitle}
               onChange={(e) => setHeroTitle(e.target.value)}
@@ -506,11 +508,11 @@ export default function AgentSettings() {
       </section>
 
       {/* Site URL preview */}
-      <section className="space-y-2 pt-2 border-t border-white/10">
-        <h2 className="text-sm font-semibold text-white/80">Your site URL</h2>
+      <section className="space-y-2 pt-2 border border-white/10 border-t">
+        <h2 className="text-sm font-semibold text.white/80">Your site URL</h2>
         <div className="flex flex-col sm:flex-row sm:items-center gap-2">
           <input
-            className="flex-1 p-3 rounded bg.white/5 border border-white/10 text-sm"
+            className="flex-1 p-3 rounded bg-white/5 border border-white/10 text-sm"
             readOnly
             value={siteUrl}
           />
