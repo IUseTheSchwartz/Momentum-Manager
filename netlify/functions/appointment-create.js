@@ -1,25 +1,24 @@
 // File: netlify/functions/appointment-create.js
-// CommonJS style so Netlify picks it up reliably.
+// CommonJS Netlify function for booking agent appointments into mm_agent_appointments
 
 const { createClient } = require("@supabase/supabase-js");
 
 const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-// Fail loudly if envs are missing
-if (!supabaseUrl || !supabaseKey) {
+// Log if envs are missing (shows up in Netlify function logs)
+if (!supabaseUrl || !serviceKey) {
   console.warn(
-    "[appointment-create] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY / SUPABASE_ANON_KEY"
+    "[appointment-create] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars"
   );
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey, {
+const supabase = createClient(supabaseUrl, serviceKey, {
   auth: { persistSession: false },
 });
 
 exports.handler = async (event) => {
-  // ───────────────────────────────── METHOD GUARD ──────────────────────────────
+  // ───────────────── METHOD GUARD ─────────────────
   if (event.httpMethod !== "POST") {
     return {
       statusCode: 405,
@@ -27,7 +26,7 @@ exports.handler = async (event) => {
     };
   }
 
-  // ───────────────────────────────── PARSE BODY ────────────────────────────────
+  // ───────────────── PARSE BODY ───────────────────
   let payload;
   try {
     payload = JSON.parse(event.body || "{}");
@@ -50,7 +49,7 @@ exports.handler = async (event) => {
     };
   }
 
-  // ──────────────────────────────── TIME PARSING ───────────────────────────────
+  // ───────────────── TIME PARSING ────────────────
   const start = new Date(start_utc);
   if (Number.isNaN(start.getTime())) {
     return {
@@ -72,7 +71,7 @@ exports.handler = async (event) => {
   const tzFinal = tz || "America/Chicago";
 
   try {
-    // ─────────────────────────── VERIFY LEAD EXISTS ────────────────────────────
+    // ─────────────── VERIFY LEAD ────────────────
     const { data: lead, error: leadErr } = await supabase
       .from("mm_agent_leads")
       .select("id, agent_site_id")
@@ -102,7 +101,6 @@ exports.handler = async (event) => {
     }
 
     const effectiveSiteId = agent_site_id || lead.agent_site_id;
-
     if (!effectiveSiteId) {
       return {
         statusCode: 400,
@@ -127,8 +125,8 @@ exports.handler = async (event) => {
       };
     }
 
-    // ───────────────────────────── CONFLICT CHECK ──────────────────────────────
-    const { data: existingAppt, error: existingErr } = await supabase
+    // ────────────── OPTIONAL CONFLICT CHECK ───────────────
+    const { data: existing, error: existingErr } = await supabase
       .from("mm_agent_appointments")
       .select("id, start_utc")
       .eq("lead_id", lead_id)
@@ -137,11 +135,11 @@ exports.handler = async (event) => {
 
     if (existingErr) {
       console.error(
-        "[appointment-create] appointments conflict check error:",
+        "[appointment-create] conflict check error:",
         existingErr
       );
-      // Don't hard fail here; keep going.
-    } else if (existingAppt) {
+      // we don't hard-fail on conflict check error
+    } else if (existing) {
       return {
         statusCode: 409,
         body: JSON.stringify({
@@ -150,7 +148,7 @@ exports.handler = async (event) => {
       };
     }
 
-    // ────────────────────────────── INSERT APPOINTMENT ─────────────────────────
+    // ────────────── INSERT INTO mm_agent_appointments ─────
     const { data: appt, error: apptErr } = await supabase
       .from("mm_agent_appointments")
       .insert({
@@ -193,7 +191,7 @@ exports.handler = async (event) => {
       };
     }
 
-    // ───────────────────────────────── SUCCESS ─────────────────────────────────
+    // ─────────────── SUCCESS ────────────────
     return {
       statusCode: 200,
       body: JSON.stringify({
