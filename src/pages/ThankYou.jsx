@@ -182,7 +182,7 @@ function formatApptForEmail(whenIso, tz = "America/Chicago") {
       hour12: true,
       timeZone: tz,
     }).format(d);
-    return `${datePart} at ${timePart} (${tz})`;
+    return `${datePart} at ${timePart} ${tz}`;
   } catch {
     return whenIso;
   }
@@ -222,15 +222,24 @@ async function sendAppointmentEmail(site, lead, slugParam) {
     const agentName = site?.about_name || "Your Agent";
     const siteName = site?.site_name || "Momentum Financial";
 
+    // Pick agent phone from site record if present
+    const agentPhoneRaw =
+      site?.agent_phone || site?.phone || site?.owner_phone || "";
+    const phoneDigits = agentPhoneRaw.replace(/[^\d+]/g, "");
+    const phoneHref = phoneDigits ? `tel:${phoneDigits}` : "";
+    const phoneLabel = agentPhoneRaw || "your agent";
+
     const safeAgent = escapeHtml(agentName);
     const safeLead = escapeHtml(lead.full_name || "there");
     const safeWhen = escapeHtml(when);
+    const safePhoneLabel = escapeHtml(phoneLabel);
 
-    // Build reschedule URL (same domain, same lead + slug, back to schedule page)
-    const slugQuery = site?.slug || slugParam
-      ? `&slug=${encodeURIComponent(site.slug || slugParam)}`
-      : "";
-    const rescheduleUrl = `${SITE_URL}/schedule?lead_id=${encodeURIComponent(
+    // Build reschedule URL – goes to /reschedule (your reschedule page)
+    const slugQuery =
+      site?.slug || slugParam
+        ? `&slug=${encodeURIComponent(site.slug || slugParam)}`
+        : "";
+    const rescheduleUrl = `${SITE_URL}/reschedule?lead_id=${encodeURIComponent(
       lead.id
     )}${slugQuery}`;
 
@@ -242,7 +251,12 @@ async function sendAppointmentEmail(site, lead, slugParam) {
       <h2 style="margin:0 0 8px;">You're booked with ${safeAgent}</h2>
       <p style="margin:0 0 12px;color:#555">Thanks for scheduling—here are the details.</p>
       <p style="margin:0 0 6px;"><strong>When:</strong> ${safeWhen} (${durationMin} min)</p>
-      <p style="margin:0 0 6px;"><strong>Where:</strong> Phone call — ${safeAgent}'s team will call you at the number you provided.</p>
+      <p style="margin:0 0 6px;"><strong>Where:</strong> Phone call — ${safeAgent} will call you.</p>
+      <p style="margin:0 0 6px;"><strong>Call will come from:</strong> ${
+        phoneHref
+          ? `<a href="${phoneHref}" style="color:#0ea5e9;text-decoration:none;">${safePhoneLabel}</a>`
+          : safePhoneLabel
+      }</p>
       <div style="margin:16px 0;">
         ${btn(rescheduleUrl, "Reschedule", true)}
         ${
@@ -252,17 +266,18 @@ async function sendAppointmentEmail(site, lead, slugParam) {
         }
       </div>
       <p style="margin-top:16px;color:#777;font-size:13px;">
-        If you need anything before the call, just reply to this email.
+        If you need anything before the call, just text ${safePhoneLabel}.
       </p>`;
 
     const text = `You're booked with ${agentName}
 When: ${when} (${durationMin} min)
-Where: Phone call — ${agentName}'s team will call you at the number you provided.
+Where: Phone call — ${agentName} will call you.
+Call will come from: ${phoneLabel}
 Reschedule: ${rescheduleUrl}${
       vcardUrl ? `\nSave contact: ${vcardUrl}` : ""
     }
 
-If you need anything before the call, just reply to this email.`;
+If you need anything before the call, text ${phoneLabel}.`;
 
     await fetch(`${SITE_URL}/.netlify/functions/send-email`, {
       method: "POST",
