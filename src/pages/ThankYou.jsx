@@ -20,6 +20,7 @@ const SITE_URL = import.meta.env.VITE_SITE_URL || window.location.origin;
 export default function ThankYou() {
   const [searchParams] = useSearchParams();
   const leadId = searchParams.get("lead_id");
+  const slugParam = searchParams.get("slug") || "";
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -68,9 +69,8 @@ export default function ThankYou() {
         setLoading(false);
 
         // 3) send appointment confirmation email to the lead
-        //    (uses mm_agent_appointments and /send-email)
         if (leadRow.email) {
-          await sendAppointmentEmail(siteRow, leadRow);
+          await sendAppointmentEmail(siteRow, leadRow, slugParam);
         }
 
         // 4) mark stage complete + send internal "new application" email ONCE
@@ -85,7 +85,7 @@ export default function ThankYou() {
     }
 
     load();
-  }, [leadId]);
+  }, [leadId, slugParam]);
 
   // Meta Pixel: Schedule event on thank-you page
   useEffect(() => {
@@ -167,7 +167,6 @@ export default function ThankYou() {
 
 /* -------------------- Email helpers -------------------- */
 
-// Simple formatter similar to formatAppt from Logan’s code
 function formatApptForEmail(whenIso, tz = "America/Chicago") {
   try {
     const d = new Date(whenIso);
@@ -189,9 +188,17 @@ function formatApptForEmail(whenIso, tz = "America/Chicago") {
   }
 }
 
-async function sendAppointmentEmail(site, lead) {
+// Same style as Logan's btn() helper
+function btn(href, label, solid = true) {
+  const base =
+    "padding:10px 14px;border-radius:8px;text-decoration:none;display:inline-block;";
+  const solidStyle = "background:#111;color:#fff;";
+  const outlineStyle = "border:1px solid #111;color:#111;";
+  return `<a href="${href}" style="${solid ? solidStyle : outlineStyle}${base}">${label}</a>`;
+}
+
+async function sendAppointmentEmail(site, lead, slugParam) {
   try {
-    // Need email + a booked appointment for this lead
     if (!lead?.email) return;
 
     const { data: appt, error: apptErr } = await supabase
@@ -206,10 +213,7 @@ async function sendAppointmentEmail(site, lead) {
       console.error("[ThankYou] load appointment error", apptErr);
       return;
     }
-    if (!appt) {
-      // No appointment found (should be rare if we just booked)
-      return;
-    }
+    if (!appt) return;
 
     const tz = appt.tz || "America/Chicago";
     const durationMin = appt.duration_min ?? 30;
@@ -222,11 +226,31 @@ async function sendAppointmentEmail(site, lead) {
     const safeLead = escapeHtml(lead.full_name || "there");
     const safeWhen = escapeHtml(when);
 
+    // Build reschedule URL (same domain, same lead + slug, back to schedule page)
+    const slugQuery = site?.slug || slugParam
+      ? `&slug=${encodeURIComponent(site.slug || slugParam)}`
+      : "";
+    const rescheduleUrl = `${SITE_URL}/schedule?lead_id=${encodeURIComponent(
+      lead.id
+    )}${slugQuery}`;
+
+    // Optional vCard URL (if present on site)
+    const vcardUrl =
+      site?.vcard_url || site?.contact_vcard_url || "";
+
     const html = `
       <h2 style="margin:0 0 8px;">You're booked with ${safeAgent}</h2>
       <p style="margin:0 0 12px;color:#555">Thanks for scheduling—here are the details.</p>
       <p style="margin:0 0 6px;"><strong>When:</strong> ${safeWhen} (${durationMin} min)</p>
       <p style="margin:0 0 6px;"><strong>Where:</strong> Phone call — ${safeAgent}'s team will call you at the number you provided.</p>
+      <div style="margin:16px 0;">
+        ${btn(rescheduleUrl, "Reschedule", true)}
+        ${
+          vcardUrl
+            ? `&nbsp;&nbsp;${btn(vcardUrl, "Save Contact", false)}`
+            : ""
+        }
+      </div>
       <p style="margin-top:16px;color:#777;font-size:13px;">
         If you need anything before the call, just reply to this email.
       </p>`;
@@ -234,6 +258,9 @@ async function sendAppointmentEmail(site, lead) {
     const text = `You're booked with ${agentName}
 When: ${when} (${durationMin} min)
 Where: Phone call — ${agentName}'s team will call you at the number you provided.
+Reschedule: ${rescheduleUrl}${
+      vcardUrl ? `\nSave contact: ${vcardUrl}` : ""
+    }
 
 If you need anything before the call, just reply to this email.`;
 
