@@ -21,7 +21,7 @@ export default function AgentSettings() {
 
   const [headshotFile, setHeadshotFile] = useState(null);
   const [notificationEmails, setNotificationEmails] = useState("");
-  const [agentPhone, setAgentPhone] = useState("");          // 🔹 NEW
+  const [agentPhone, setAgentPhone] = useState(""); // 🔹 NEW
   const [heroTitle, setHeroTitle] = useState("");
   const [heroSub, setHeroSub] = useState("");
   const [aboutName, setAboutName] = useState("");
@@ -112,12 +112,14 @@ export default function AgentSettings() {
 
       // hydrate form state
       setNotificationEmails(siteRow.notification_emails || "");
-      setAgentPhone(siteRow.agent_phone || "");                          // 🔹 NEW
+      setAgentPhone(siteRow.agent_phone || ""); // 🔹 NEW
       setHeroTitle(siteRow.hero_title || "");
       setHeroSub(siteRow.hero_sub || "");
       setAboutName(siteRow.about_name || "");
       setAboutBio(siteRow.about_bio || "");
-      setHeroYoutubeUrl(siteRow.hero_youtube_url || DEFAULT_INTRO_VIDEO_URL);
+      setHeroYoutubeUrl(
+        siteRow.hero_youtube_url || DEFAULT_INTRO_VIDEO_URL
+      );
       setSocialYoutube(siteRow.social_youtube_url || "");
       setSocialInstagram(siteRow.social_instagram_url || "");
       setSocialSnapchat(siteRow.social_snapchat_url || "");
@@ -145,7 +147,9 @@ export default function AgentSettings() {
   }, [site, aboutName]);
 
   const siteUrl = `https://momentummanager.net/${slug}`;
-  const previewSiteName = `${aboutName || site?.about_name || "Your Name"} | Momentum Financial`;
+  const previewSiteName = `${
+    aboutName || site?.about_name || "Your Name"
+  } | Momentum Financial`;
 
   async function submit(e) {
     e.preventDefault();
@@ -161,7 +165,7 @@ export default function AgentSettings() {
 
       const updates = {
         notification_emails: notificationEmails,
-        agent_phone: agentPhone,                              // 🔹 NEW
+        agent_phone: agentPhone, // 🔹 NEW
         hero_title: heroTitle,
         hero_sub: heroSub,
         about_name: aboutName,
@@ -267,7 +271,8 @@ export default function AgentSettings() {
               Phone number for calls/texts
             </div>
             <p className="text-xs text-white/50">
-              This number will appear in client emails as the number to text or expect a call from.
+              This number will appear in client emails as the number to text or
+              expect a call from.
             </p>
           </div>
           <div className="md:col-span-2">
@@ -416,9 +421,7 @@ export default function AgentSettings() {
           </span>
         )}
         {error && (
-          <div className="mt-2 text-xs text-red-400">
-            {error}
-          </div>
+          <div className="mt-2 text-xs text-red-400">{error}</div>
         )}
       </div>
     </form>
