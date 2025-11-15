@@ -3,7 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient.js";
 
 const DEFAULT_INTRO_VIDEO_URL = "https://www.youtube.com/watch?v=Co1LfteWE8I";
-const HEADSHOT_BUCKET = "mm_agent_assets"; // 🔹 change to your bucket name if different
+// 🔹 Make sure this matches your Supabase storage bucket name
+const HEADSHOT_BUCKET = "mm_agent_assets";
 
 function slugFromName(name) {
   const trimmed = (name || "").trim().toLowerCase();
@@ -27,7 +28,6 @@ function normalizeSocial(value, kind) {
 
   switch (kind) {
     case "youtube":
-      // YouTube handle style
       return `https://youtube.com/@${handle}`;
     case "instagram":
       return `https://instagram.com/${handle}`;
@@ -36,43 +36,6 @@ function normalizeSocial(value, kind) {
     default:
       return raw;
   }
-}
-
-// Center square crop helper
-async function cropToSquare(file) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const reader = new FileReader();
-
-    reader.onload = (e) => {
-      img.src = e.target.result;
-    };
-    reader.onerror = reject;
-
-    img.onload = () => {
-      const size = Math.min(img.width, img.height);
-      const sx = (img.width - size) / 2;
-      const sy = (img.height - size) / 2;
-
-      const canvas = document.createElement("canvas");
-      canvas.width = size;
-      canvas.height = size;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, sx, sy, size, size, 0, 0, size, size);
-
-      canvas.toBlob(
-        (blob) => {
-          if (!blob) return reject(new Error("Canvas empty"));
-          resolve(blob);
-        },
-        file.type || "image/jpeg",
-        0.9
-      );
-    };
-
-    img.onerror = reject;
-    reader.readAsDataURL(file);
-  });
 }
 
 export default function AgentSettings() {
@@ -229,14 +192,13 @@ export default function AgentSettings() {
     if (!headshotFile || !currentSite) return currentSite.headshot_url || "";
 
     try {
-      const croppedBlob = await cropToSquare(headshotFile);
       const ext =
         headshotFile.name.split(".").pop()?.toLowerCase() || "jpg";
       const path = `headshots/${currentSite.id}-${Date.now()}.${ext}`;
 
       const { data: uploadData, error: uploadErr } = await supabase.storage
         .from(HEADSHOT_BUCKET)
-        .upload(path, croppedBlob, {
+        .upload(path, headshotFile, {
           contentType: headshotFile.type || "image/jpeg",
           upsert: true,
         });
@@ -251,9 +213,15 @@ export default function AgentSettings() {
         .from(HEADSHOT_BUCKET)
         .getPublicUrl(uploadData.path);
 
-      return publicUrlData.publicUrl || currentSite.headshot_url || "";
+      const publicUrl = publicUrlData?.publicUrl || "";
+      if (!publicUrl) {
+        setHeadshotError("Failed to get headshot URL.");
+        return currentSite.headshot_url || "";
+      }
+
+      return publicUrl;
     } catch (e) {
-      console.error("[AgentSettings] crop/upload error", e);
+      console.error("[AgentSettings] upload error", e);
       setHeadshotError("Failed to process headshot.");
       return currentSite.headshot_url || "";
     }
@@ -280,7 +248,7 @@ export default function AgentSettings() {
         "snapchat"
       );
 
-      // Upload headshot (cropped) if needed
+      // Upload headshot if needed
       const headshotUrl = await uploadHeadshotIfNeeded(site);
 
       const updates = {
@@ -344,11 +312,11 @@ export default function AgentSettings() {
         <div className="grid gap-4 md:grid-cols-3 md:items-start">
           <div className="text-sm text-white/70">
             <div className="font-semibold mb-1">
-              Headshot (auto-cropped to square)
+              Headshot (square avatar)
             </div>
             <p className="text-xs text-white/50">
-              Upload a clear front-facing photo. We&apos;ll crop it to a square
-              automatically.
+              Upload a clear front-facing photo. We&apos;ll display it as a
+              square avatar on your page.
             </p>
             {headshotError && (
               <p className="text-xs text-red-400 mt-1">{headshotError}</p>
@@ -540,11 +508,21 @@ export default function AgentSettings() {
       {/* Site URL preview */}
       <section className="space-y-2 pt-2 border-t border-white/10">
         <h2 className="text-sm font-semibold text-white/80">Your site URL</h2>
-        <input
-          className="w-full p-3 rounded bg-white/5 border border-white/10 text-sm"
-          readOnly
-          value={siteUrl}
-        />
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          <input
+            className="flex-1 p-3 rounded bg.white/5 border border-white/10 text-sm"
+            readOnly
+            value={siteUrl}
+          />
+          <a
+            href={siteUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center justify-center rounded bg-white text-black text-sm font-semibold px-4 py-2 hover:bg-gray-100"
+          >
+            Open site
+          </a>
+        </div>
         <p className="text-xs text-white/50">
           This is where your public page will live. It&apos;s generated from
           your name as <code>first-lastname</code> and stored as a slug.
