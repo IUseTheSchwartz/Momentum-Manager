@@ -7,7 +7,7 @@ function Skeleton({ className = "" }) {
   return <div className={`animate-pulse rounded-md bg-white/10 ${className}`} />;
 }
 
-/* -------------------- Timezone math helpers (same as Logan) ------------------ */
+/* -------------------- Timezone math helpers ------------------ */
 function tzOffsetMinutes(instant, tz) {
   const asTz = new Date(instant.toLocaleString("en-US", { timeZone: tz }));
   const asUtc = new Date(instant.toLocaleString("en-US", { timeZone: "UTC" }));
@@ -79,7 +79,7 @@ async function computeSlotsForAgentSite(agentSiteId) {
     }
   }
 
-  // 2) Existing appointments for THIS agent site (to gray out taken slots)
+  // 2) Existing appointments for THIS agent site
   const { data: taken, error: takenErr } = await supabase
     .from("mf_appointments")
     .select("start_utc, end_utc, status, agent_site_id")
@@ -90,7 +90,7 @@ async function computeSlotsForAgentSite(agentSiteId) {
     console.error("[Schedule] appointments error:", takenErr);
   }
 
-  // 3) Global blackouts (optional; same as Logan)
+  // 3) Global blackouts (optional; shared)
   const { data: blackouts, error: boErr } = await supabase
     .from("mf_blackouts")
     .select("*");
@@ -197,7 +197,6 @@ async function computeSlotsForAgentSite(agentSiteId) {
     cursorUtc = new Date(nextNoonUtcISO);
   }
 
-  // Hard cap like Logan
   return out.slice(0, 120);
 }
 
@@ -215,7 +214,7 @@ export default function Schedule() {
   const [lead, setLead] = useState(null);
   const [site, setSite] = useState(null);
 
-  // Meta Pixel (optional)
+  // Meta Pixel
   useEffect(() => {
     if (window.fbq) {
       window.fbq("track", "Lead");
@@ -269,7 +268,7 @@ export default function Schedule() {
 
         setSite(siteRow);
 
-        // 3) Compute slots using this agent's availability
+        // 3) Slots from this agent's availability
         const s = await computeSlotsForAgentSite(siteRow.id);
         setSlots(s);
         setLoading(false);
@@ -284,7 +283,11 @@ export default function Schedule() {
   }, [leadId]);
 
   const siteName = site?.site_name || "Momentum Financial";
-  const pageOwner = site?.about_name || "Your Mentor";
+  // 🔹 Always try to show the agent's name instead of "Your Mentor"
+  const pageOwner =
+    site?.about_name || site?.agent_name || siteName || "Momentum Financial";
+
+  // 🔹 Back link should always go to the agent's public landing page
   const homeHref = site?.slug ? `/${site.slug}` : "/";
 
   async function handleBook(slt) {
@@ -293,7 +296,6 @@ export default function Schedule() {
     try {
       setBooking(true);
 
-      // Pull availability again just for duration + tz
       const { data: av } = await supabase
         .from("mm_agent_availability")
         .select("*")
@@ -338,19 +340,15 @@ export default function Schedule() {
 
   return (
     <div className="min-h-screen bg-[#1e1f22] text-white">
-      {/* Header with agent branding + logo fallback */}
+      {/* Header with agent branding + logo */}
       <header className="mx-auto max-w-6xl px-4 py-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           {loading ? (
             <Skeleton className="h-9 w-32 rounded" />
-          ) : site?.logo_url || true ? ( // always show something
-            <img
-              src={site?.logo_url || "/logo.png"}
-              alt={siteName}
-              className="h-9"
-            />
+          ) : site?.logo_url ? (
+            <img src={site.logo_url} alt={siteName} className="h-9" />
           ) : (
-            <div className="h-9 w-32 bg-white/10 rounded" />
+            <img src="/logo.png" alt="Momentum Manager" className="h-9" />
           )}
           <span className="text-white/60 text-sm">
             {loading ? (
