@@ -7,8 +7,7 @@ function Skeleton({ className = "" }) {
   return <div className={`animate-pulse rounded-md bg-white/10 ${className}`} />;
 }
 
-/* -------------------- Timezone helpers (same as Logan) -------------------- */
-
+/* -------------------- Timezone math helpers (same as Logan) ------------------ */
 function tzOffsetMinutes(instant, tz) {
   const asTz = new Date(instant.toLocaleString("en-US", { timeZone: tz }));
   const asUtc = new Date(instant.toLocaleString("en-US", { timeZone: "UTC" }));
@@ -44,24 +43,34 @@ function prettyInTz(utcISO, tz = "America/Chicago") {
   return `${day}, ${mon} ${date} · ${time}`;
 }
 
-/* ------------------------ Slot computation (Logan) ------------------------ */
-/* Uses the main mf_availability/mf_appointments config, same as Logan's site */
+/* --------------------------- computeSlots per agent site --------------------------- */
 
-async function computeSlots() {
-  const { data: av } = await supabase
-    .from("mf_availability")
+async function computeSlotsForAgentSite(agentSiteId) {
+  if (!agentSiteId) return [];
+
+  // 1) Per-agent availability row
+  const { data: av, error: avErr } = await supabase
+    .from("mm_agent_availability")
     .select("*")
-    .order("updated_at", { ascending: false })
-    .limit(1)
+    .eq("agent_site_id", agentSiteId)
     .maybeSingle();
 
-  const tz = av?.tz || "America/Chicago";
-  const slotMin = av?.slot_minutes ?? 30;
-  const buffer = av?.buffer_minutes ?? 15;
-  const minLeadH = av?.min_lead_hours ?? 12;
-  const windowDays = av?.booking_window_days ?? 14;
+  if (avErr) {
+    console.error("[Schedule] availability error:", avErr);
+    return [];
+  }
+  if (!av) {
+    console.warn("[Schedule] no availability row for agent_site_id", agentSiteId);
+    return [];
+  }
 
-  let weekly = av?.weekly || {};
+  const tz = av.tz || "America/Chicago";
+  const slotMin = av.slot_minutes ?? 30;
+  const buffer = av.buffer_minutes ?? 15;
+  const minLeadH = av.min_lead_hours ?? 12;
+  const windowDays = av.booking_window_days ?? 14;
+
+  let weekly = av.weekly || {};
   if (typeof weekly === "string") {
     try {
       weekly = JSON.parse(weekly);
@@ -70,12 +79,25 @@ async function computeSlots() {
     }
   }
 
-  const { data: taken } = await supabase
+  // 2) Existing appointments for THIS agent site (to gray out taken slots)
+  const { data: taken, error: takenErr } = await supabase
     .from("mf_appointments")
-    .select("start_utc, end_utc, status")
+    .select("start_utc, end_utc, status, agent_site_id")
+    .eq("agent_site_id", agentSiteId)
     .in("status", ["booked", "rescheduled", "scheduled"]);
 
-  const { data: blackouts } = await supabase.from("mf_blackouts").select("*");
+  if (takenErr) {
+    console.error("[Schedule] appointments error:", takenErr);
+  }
+
+  // 3) Global blackouts (optional; same as Logan)
+  const { data: blackouts, error: boErr } = await supabase
+    .from("mf_blackouts")
+    .select("*");
+
+  if (boErr) {
+    console.error("[Schedule] blackouts error:", boErr);
+  }
 
   const overlaps = (aStart, aEnd, bStart, bEnd) =>
     aStart < bEnd && bStart < aEnd;
@@ -98,7 +120,6 @@ async function computeSlots() {
     })
       .format(cursorUtc)
       .split("-");
-
     const y = parseInt(parts[0], 10);
     const m = parseInt(parts[1], 10);
     const d = parseInt(parts[2], 10);
@@ -108,6 +129,7 @@ async function computeSlots() {
         zonedDateTimeToUTCISO({ y, m, d, hh: 12, mm: 0, tz })
       ).getUTCDay()
     ];
+
     const ranges = weekly[dow] || [];
 
     for (const [startStr, endStr] of ranges) {
@@ -123,7 +145,9 @@ async function computeSlots() {
 
       while (slotStartUtc < rangeEndUtc) {
         const slotEndUtc = new Date(slotStartUtc.getTime() + slotMin * 60000);
-        const withBufEndUtc = new Date(slotEndUtc.getTime() + buffer * 60000);
+        const withBufEndUtc = new Date(
+          slotEndUtc.getTime() + buffer * 60000
+        );
 
         if (withBufEndUtc <= rangeEndUtc && slotStartUtc >= startWindowUtc) {
           const isTaken = (taken || []).some((t) =>
@@ -158,7 +182,6 @@ async function computeSlots() {
           });
         }
 
-        // step by one slot
         slotStartUtc = new Date(slotStartUtc.getTime() + slotMin * 60000);
       }
     }
@@ -174,112 +197,107 @@ async function computeSlots() {
     cursorUtc = new Date(nextNoonUtcISO);
   }
 
-  // cap to avoid crazy long lists
+  // Hard cap like Logan
   return out.slice(0, 120);
 }
 
-/* ------------------------------- Component ------------------------------- */
+/* -------------------------------- Component -------------------------------- */
 
 export default function Schedule() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const leadId = searchParams.get("lead_id");
 
-  // slots + booking state (same as Logan)
+  const [loading, setLoading] = useState(true);
   const [slots, setSlots] = useState([]);
   const [booking, setBooking] = useState(false);
-  const [loadingSlots, setLoadingSlots] = useState(true);
-  const [loadError, setLoadError] = useState("");
-
-  // branding (agent site)
+  const [err, setErr] = useState("");
+  const [lead, setLead] = useState(null);
   const [site, setSite] = useState(null);
-  const [brandingLoading, setBrandingLoading] = useState(true);
 
-  // 🔹 Load agent site (for header / logo / name)
+  // Meta Pixel (optional)
   useEffect(() => {
-    (async () => {
+    if (window.fbq) {
+      window.fbq("track", "Lead");
+    }
+  }, []);
+
+  useEffect(() => {
+    async function load() {
       if (!leadId) {
-        setBrandingLoading(false);
+        setErr(
+          "We couldn’t find your application. Please return to the main page and start again."
+        );
+        setLoading(false);
         return;
       }
+
       try {
+        // 1) Lead
         const { data: leadRow, error: leadErr } = await supabase
           .from("mm_agent_leads")
-          .select("agent_site_id")
+          .select("id, full_name, email, phone, agent_site_id")
           .eq("id", leadId)
           .maybeSingle();
 
-        if (leadErr || !leadRow?.agent_site_id) {
-          console.error("[Schedule] lead/site lookup failed:", leadErr);
-          setBrandingLoading(false);
+        if (leadErr || !leadRow) {
+          console.error("[Schedule] lead error:", leadErr);
+          setErr(
+            "We couldn’t find your application. Please return to the main page and start again."
+          );
+          setLoading(false);
           return;
         }
 
+        setLead(leadRow);
+
+        // 2) Agent site for branding
         const { data: siteRow, error: siteErr } = await supabase
           .from("mm_agent_sites")
           .select("*")
           .eq("id", leadRow.agent_site_id)
           .maybeSingle();
 
-        if (siteErr) {
-          console.error("[Schedule] site fetch failed:", siteErr);
-        } else if (siteRow) {
-          setSite(siteRow);
+        if (siteErr || !siteRow) {
+          console.error("[Schedule] site error:", siteErr);
+          setErr(
+            "We found your application, but this recruiting site is missing some settings."
+          );
+          setLoading(false);
+          return;
         }
-      } catch (e) {
-        console.error("[Schedule] branding load error:", e);
-      } finally {
-        setBrandingLoading(false);
-      }
-    })();
-  }, [leadId]);
 
-  // 🔹 Load available time slots
-  useEffect(() => {
-    if (!leadId) {
-      setLoadError(
-        "We couldn’t find your application. Please return to the main page and start again."
-      );
-      setLoadingSlots(false);
-      return;
+        setSite(siteRow);
+
+        // 3) Compute slots using this agent's availability
+        const s = await computeSlotsForAgentSite(siteRow.id);
+        setSlots(s);
+        setLoading(false);
+      } catch (e) {
+        console.error("[Schedule] load error:", e);
+        setErr("Something went wrong loading your booking step.");
+        setLoading(false);
+      }
     }
 
-    (async () => {
-      try {
-        const s = await computeSlots();
-        setSlots(s);
-      } catch (e) {
-        console.error(e);
-        setLoadError(
-          "Could not load available times. Please try again later."
-        );
-      } finally {
-        setLoadingSlots(false);
-      }
-    })();
+    load();
   }, [leadId]);
 
   const siteName = site?.site_name || "Momentum Financial";
-  const pageOwner = site?.about_name || "";
+  const pageOwner = site?.about_name || "Your Mentor";
   const homeHref = site?.slug ? `/${site.slug}` : "/";
 
   async function handleBook(slt) {
-    if (!leadId) {
-      alert(
-        "We couldn't find your application. Please return to the main page and start again."
-      );
-      return;
-    }
+    if (!leadId || !site) return;
 
     try {
       setBooking(true);
 
-      // grab current availability again for duration + tz
+      // Pull availability again just for duration + tz
       const { data: av } = await supabase
-        .from("mf_availability")
+        .from("mm_agent_availability")
         .select("*")
-        .order("updated_at", { ascending: false })
-        .limit(1)
+        .eq("agent_site_id", site.id)
         .maybeSingle();
 
       const tz = av?.tz || "America/Chicago";
@@ -290,6 +308,7 @@ export default function Schedule() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           lead_id: leadId,
+          agent_site_id: site.id,
           start_utc: slt.startUtc,
           duration_min: durationMin,
           tz,
@@ -303,13 +322,12 @@ export default function Schedule() {
           const j = JSON.parse(txt);
           if (j?.error) msg = j.error;
         } catch {
-          // ignore
+          // ignore JSON parse error
         }
         if (res.status === 409) msg = "That slot was just taken. Pick another.";
         throw new Error(msg);
       }
 
-      // success → Thank You page
       navigate(`/thank-you?lead_id=${leadId}`);
     } catch (e) {
       alert(e.message || "Could not book. Try another slot.");
@@ -320,27 +338,27 @@ export default function Schedule() {
 
   return (
     <div className="min-h-screen bg-[#1e1f22] text-white">
-      {/* Header with Momentum logo + agent name */}
+      {/* Header with agent branding + logo fallback */}
       <header className="mx-auto max-w-6xl px-4 py-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          {brandingLoading ? (
+          {loading ? (
             <Skeleton className="h-9 w-32 rounded" />
-          ) : (
+          ) : site?.logo_url || true ? ( // always show something
             <img
               src={site?.logo_url || "/logo.png"}
               alt={siteName}
               className="h-9"
             />
+          ) : (
+            <div className="h-9 w-32 bg-white/10 rounded" />
           )}
           <span className="text-white/60 text-sm">
-            {brandingLoading ? (
+            {loading ? (
               <span className="inline-block h-4 w-28 animate-pulse bg-white/10 rounded" />
-            ) : pageOwner ? (
+            ) : (
               <>
                 {pageOwner} | {siteName}
               </>
-            ) : (
-              siteName
             )}
           </span>
         </div>
@@ -355,22 +373,18 @@ export default function Schedule() {
 
       <main className="mx-auto max-w-6xl px-4 pb-24">
         <h1 className="text-2xl sm:text-3xl font-bold mb-2">Pick a time</h1>
-        <p className="text-white/70 mb-6 text-sm sm:text-base">
+        <p className="text-white/70 mb-6">
           Choose a time that works best for you. You’ll get a confirmation with
           all the details.
         </p>
 
-        {!leadId && (
-          <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 mb-6 text-sm">
-            We couldn’t find your application. Please{" "}
-            <Link to="/" className="underline underline-offset-2">
-              return to the main page
-            </Link>{" "}
-            and start again.
+        {err && !loading && (
+          <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm">
+            {err}
           </div>
         )}
 
-        {loadingSlots && (
+        {loading && !err && (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-80">
             {Array.from({ length: 6 }).map((_, i) => (
               <Skeleton key={i} className="h-20 w-full rounded-lg" />
@@ -378,13 +392,7 @@ export default function Schedule() {
           </div>
         )}
 
-        {!loadingSlots && loadError && (
-          <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm">
-            {loadError}
-          </div>
-        )}
-
-        {!loadingSlots && !loadError && leadId && (
+        {!loading && !err && (
           <>
             {!slots.length ? (
               <div className="text-white/70">
