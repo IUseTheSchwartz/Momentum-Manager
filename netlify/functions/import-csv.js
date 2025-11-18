@@ -126,32 +126,53 @@ function* chunked(arr, size) {
 /* ---------- safer DOB + age helpers ---------- */
 
 /**
- * Accept US-style dates: MM/DD/YYYY or MM-DD-YYYY.
- * If it doesn't match that pattern or the year is insane, return null.
+ * Accept dates in:
+ * - MM/DD/YYYY or MM-DD-YYYY
+ * - YYYY-MM-DD
+ * Ignore anything after "T" or space (e.g. 1942-05-12T00:00:00.000Z)
  */
 function toDateISO(s) {
   if (!s) return null;
   const t = String(s).trim();
 
-  // MM/DD/YYYY or MM-DD-YYYY
-  const m = t.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  // Drop time / timezone / extra junk after a T or space
+  const core = t.split("T")[0].split(" ")[0].trim();
+
+  // Try MM/DD/YYYY or MM-DD-YYYY (US-style)
+  let m = core.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (m) {
+    const [, mmStr, ddStr, yyyyStr] = m;
+    const mm = parseInt(mmStr, 10);
+    const dd = parseInt(ddStr, 10);
+    const y = parseInt(yyyyStr, 10);
+
+    if (!Number.isFinite(mm) || !Number.isFinite(dd) || !Number.isFinite(y)) return null;
+    if (y < 1900 || y > 2100) return null;
+    if (mm < 1 || mm > 12) return null;
+    if (dd < 1 || dd > 31) return null;
+
+    const mmP = String(mm).padStart(2, "0");
+    const ddP = String(dd).padStart(2, "0");
+    return `${y}-${mmP}-${ddP}`;
+  }
+
+  // Try ISO-like YYYY-MM-DD
+  m = core.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
   if (!m) return null;
 
-  const [, mmStr, ddStr, yyyyStr] = m;
-  const mm = parseInt(mmStr, 10);
-  const dd = parseInt(ddStr, 10);
-  const y = parseInt(yyyyStr, 10);
+  const [, yyyyStr2, mmStr2, ddStr2] = m;
+  const y2 = parseInt(yyyyStr2, 10);
+  const mm2 = parseInt(mmStr2, 10);
+  const dd2 = parseInt(ddStr2, 10);
 
-  // sanity checks
-  if (!Number.isFinite(mm) || !Number.isFinite(dd) || !Number.isFinite(y)) return null;
-  if (y < 1900 || y > 2100) return null; // kills 10830, 21481, etc.
-  if (mm < 1 || mm > 12) return null;
-  if (dd < 1 || dd > 31) return null;
+  if (!Number.isFinite(mm2) || !Number.isFinite(dd2) || !Number.isFinite(y2)) return null;
+  if (y2 < 1900 || y2 > 2100) return null;
+  if (mm2 < 1 || mm2 > 12) return null;
+  if (dd2 < 1 || dd2 > 31) return null;
 
-  // store as YYYY-MM-DD
-  const mmP = String(mm).padStart(2, "0");
-  const ddP = String(dd).padStart(2, "0");
-  return `${y}-${mmP}-${ddP}`;
+  const mmP2 = String(mm2).padStart(2, "0");
+  const ddP2 = String(dd2).padStart(2, "0");
+  return `${y2}-${mmP2}-${ddP2}`;
 }
 
 function ageFromDOB(iso) {
