@@ -16,21 +16,60 @@ export default function TradeCenter() {
   const [targetUserId, setTargetUserId] = useState("");
   const [note, setNote] = useState("");
 
+  // --------- helper: load "my leads" like AgentLeads does ----------
+  async function loadMyLeadsForUser(uid) {
+    if (!uid) return [];
+
+    // 1) currently assigned to me
+    const cur = await supabase
+      .from("leads")
+      .select("id, assigned_to, created_at")
+      .eq("assigned_to", uid);
+    const ids = new Set((cur.data || []).map((r) => r.id));
+
+    // 2) historically assigned via lead_assignments
+    const hist = await supabase
+      .from("lead_assignments")
+      .select("lead_id")
+      .eq("user_id", uid)
+      .limit(2000);
+    (hist.data || []).forEach((r) => ids.add(r.lead_id));
+
+    if (!ids.size) return [];
+
+    // 3) fetch details for those IDs
+    const list = Array.from(ids);
+    const results = [];
+    const chunkSize = 500;
+
+    for (let i = 0; i < list.length; i += chunkSize) {
+      const slice = list.slice(i, i + chunkSize);
+      const res = await supabase
+        .from("leads")
+        .select("id, first_name, last_name, state, lead_type, created_at")
+        .in("id", slice);
+      if (!res.error && res.data) {
+        results.push(...res.data);
+      }
+    }
+
+    // optional: sort newest first
+    results.sort(
+      (a, b) => new Date(b.created_at) - new Date(a.created_at)
+    );
+
+    return results;
+  }
+
   async function loadAll(uid) {
     setLoading(true);
     try {
-      const [usersRes, myLeadsRes, incomingRes, outgoingRes] = await Promise.all([
+      // users + trades
+      const [usersRes, incomingRes, outgoingRes] = await Promise.all([
         supabase
           .from("user_profiles")
           .select("id, full_name, email")
           .order("full_name", { ascending: true }),
-
-        supabase
-          .from("leads")
-          .select("id, first_name, last_name, state, lead_type, created_at")
-          .eq("assigned_to", uid)
-          .order("created_at", { ascending: false })
-          .limit(1000),
 
         supabase
           .from("lead_trades")
@@ -73,15 +112,15 @@ export default function TradeCenter() {
       ]);
 
       if (usersRes.error) console.error("users load error:", usersRes.error);
-      if (myLeadsRes.error)
-        console.error("myLeads load error:", myLeadsRes.error);
       if (incomingRes.error)
         console.error("incoming trades load error:", incomingRes.error);
       if (outgoingRes.error)
         console.error("outgoing trades load error:", outgoingRes.error);
 
+      const myLeadsLoaded = await loadMyLeadsForUser(uid);
+
       setUsers(usersRes.data || []);
-      setMyLeads(myLeadsRes.data || []);
+      setMyLeads(myLeadsLoaded || []);
       setIncoming(incomingRes.data || []);
       setOutgoing(outgoingRes.data || []);
     } finally {
@@ -313,11 +352,7 @@ export default function TradeCenter() {
             const offerShortName = `${offer.first_name || ""} ${
               (offer.last_name || "").slice(0, 1)
             }.`.trim();
-            const [selectedReturnLeadId, setSelectedReturnLeadId] = useState("");
 
-            // NOTE: to keep hooks valid, we can't create state inside map.
-            // So instead we'll use a local controlled map above if needed.
-            // For simplicity here, we won't pre-bind state; we'll use a small helper component.
             return (
               <IncomingTradeRow
                 key={t.id}
@@ -387,7 +422,8 @@ export default function TradeCenter() {
                   </div>
                 </div>
                 <div>
-                  Your lead: <span className="font-semibold">{offerLabel}</span>
+                  Your lead:{" "}
+                  <span className="font-semibold">{offerLabel}</span>
                 </div>
                 {t.note && (
                   <div className="text-white/70">
