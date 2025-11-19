@@ -1,4 +1,3 @@
-// File: src/pages/ManagerLeads.jsx
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { fmtMDY } from "../lib/dateFmt";
@@ -24,11 +23,8 @@ export default function ManagerLeads() {
   // Pagination
   const [page, setPage] = useState(1);
 
-  // Active assigned lead IDs (from lead_assignments)
-  const [assignedIds, setAssignedIds] = useState([]);
-
   async function load() {
-    // --------- fetch leads in pages so we bypass the 1000-row API cap ----------
+    // Fetch leads in pages so we bypass the 1000-row API cap
     const pageSize = 1000;
     const maxTotal = 10000; // safety cap
     let allLeads = [];
@@ -56,7 +52,6 @@ export default function ManagerLeads() {
       from += pageSize;
     }
 
-    // Fetch agents
     const { data: agents, error: agentErr } = await supabase
       .from("user_profiles")
       .select("id, full_name, email")
@@ -66,28 +61,8 @@ export default function ManagerLeads() {
       console.error("[ManagerLeads] agents load error:", agentErr);
     }
 
-    // Fetch active assignments for the leads we just loaded
-    const leadIds = allLeads.map((l) => l.id);
-    let activeAssignedIds = [];
-
-    if (leadIds.length) {
-      const { data: assignRows, error: assignErr } = await supabase
-        .from("lead_assignments")
-        .select("lead_id, unassigned_at")
-        .in("lead_id", leadIds);
-
-      if (assignErr) {
-        console.error("[ManagerLeads] lead_assignments load error:", assignErr);
-      } else if (assignRows && assignRows.length) {
-        activeAssignedIds = assignRows
-          .filter((a) => !a.unassigned_at) // currently assigned
-          .map((a) => a.lead_id);
-      }
-    }
-
     setRows(allLeads || []);
     setUsers(agents || []);
-    setAssignedIds(activeAssignedIds);
   }
 
   useEffect(() => {
@@ -97,12 +72,6 @@ export default function ManagerLeads() {
       await load();
     })();
   }, []);
-
-  // Build a Set for quick "is assigned" checks
-  const assignedIdSet = useMemo(
-    () => new Set(assignedIds || []),
-    [assignedIds]
-  );
 
   // Reset to page 1 when filters or total rows change
   useEffect(() => {
@@ -121,8 +90,8 @@ export default function ManagerLeads() {
       if (s && rowState !== s) return false;
       if (t && rowType !== t) return false;
 
-      // "Only unassigned" based on active assignments table
-      if (onlyUnassigned && assignedIdSet.has(r.id)) return false;
+      // "Only unassigned" based on status column
+      if (onlyUnassigned && r.status === "assigned") return false;
 
       if (!q) return true;
       const name = [r.first_name, r.last_name]
@@ -135,12 +104,12 @@ export default function ManagerLeads() {
         (r.email || "").toLowerCase().includes(q)
       );
     });
-  }, [rows, stateFilter, typeFilter, onlyUnassigned, search, assignedIdSet]);
+  }, [rows, stateFilter, typeFilter, onlyUnassigned, search]);
 
   // Stats (based on current filter)
   const totalFiltered = filtered.length;
   const assignedCount = filtered.reduce(
-    (acc, r) => acc + (assignedIdSet.has(r.id) ? 1 : 0),
+    (acc, r) => acc + (r.status === "assigned" ? 1 : 0),
     0
   );
   const unassignedCount = totalFiltered - assignedCount;
@@ -284,7 +253,7 @@ export default function ManagerLeads() {
         />
 
         <select
-          className="rounded bg.white/5 border border-white/10 p-2"
+          className="rounded bg-white/5 border border-white/10 p-2"
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value)}
         >
@@ -321,7 +290,7 @@ export default function ManagerLeads() {
           >
             Quick Assign
           </button>
-          <div className="text-sm text.white/60">{statusMsg}</div>
+          <div className="text-sm text-white/60">{statusMsg}</div>
 
           {/* Pagination controls */}
           <div className="ml-auto flex items-center gap-2 text-xs">
@@ -407,7 +376,7 @@ export default function ManagerLeads() {
                 </td>
                 <td className="px-1 py-1">
                   <div className="flex gap-2">
-                    {assignedIdSet.has(l.id) ? (
+                    {l.assigned_to ? (
                       <button
                         className="btn text-[10px]"
                         onClick={() => unassignOne(l.id)}
