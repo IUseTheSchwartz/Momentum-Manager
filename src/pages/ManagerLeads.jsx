@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { fmtMDY } from "../lib/dateFmt";
 
-const LEAD_TYPES = ["FEX", "VET", "IUL", "TRUCKER", "MORTGAGE", "ILC"];
+const LEAD_TYPES = ["FEX", "VET", "IUL", "TRUCKER", "MORTGAGE", "ILC", "FRESH"];
 
 export default function ManagerLeads() {
   const [rows, setRows] = useState([]);
@@ -25,7 +25,7 @@ export default function ManagerLeads() {
       supabase
         .from("leads")
         .select(
-          "id,first_name,last_name,phone_e164,email,state,military_branch,dob,age,lead_type,beneficiary_name,status,assigned_to,created_at"
+          "id,first_name,last_name,phone_e164,email,state,address,military_branch,dob,age,lead_type,beneficiary_name,status,assigned_to,created_at"
         )
         .order("created_at", { ascending: false })
         .limit(5000),
@@ -216,6 +216,7 @@ export default function ManagerLeads() {
               <th className="text-left px-1 py-1">Phone</th>
               <th className="text-left px-1 py-1">Email</th>
               <th className="text-left px-1 py-1">State</th>
+              <th className="text-left px-1 py-1">Address</th>
               <th className="text-left px-1 py-1">Lead Type</th>
               <th className="text-left px-1 py-1">Military</th>
               <th className="text-left px-1 py-1">DOB</th>
@@ -236,6 +237,7 @@ export default function ManagerLeads() {
                 <td className="px-1 py-1">{l.phone_e164 || "—"}</td>
                 <td className="px-1 py-1">{l.email || "—"}</td>
                 <td className="px-1 py-1">{l.state || "—"}</td>
+                <td className="px-1 py-1">{l.address || "—"}</td>
                 <td className="px-1 py-1">{l.lead_type || "—"}</td>
                 <td className="px-1 py-1">{l.military_branch || "—"}</td>
                 <td className="px-1 py-1">{fmtMDY(l.dob)}</td>
@@ -276,7 +278,7 @@ export default function ManagerLeads() {
             ))}
             {!filtered.length && (
               <tr>
-                <td className="p-3 text-white/60" colSpan={12}>
+                <td className="p-3 text-white/60" colSpan={13}>
                   No leads.
                 </td>
               </tr>
