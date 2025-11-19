@@ -104,7 +104,31 @@ const MAP = {
   city: ["city", "City"],
   zip: ["zip", "Zip", "zipcode", "Zip Code", "postal", "Postal Code"],
   age: ["age", "Age"],
-  dob: ["dob", "DOB", "Date of Birth", "Birthdate", "Birth Date"],
+  // 👇 DOB / Date of Birth variants
+  dob: [
+    "dob",
+    "DOB",
+    "D.O.B",
+    "D O B",
+    "Date of Birth",
+    "date of birth",
+    "Birthdate",
+    "Birth Date",
+    "date_of_birth",
+    "DateOfBirth",
+  ],
+  // 👇 Address variants
+  address: [
+    "address",
+    "Address",
+    "Street",
+    "Street Address",
+    "Home Address",
+    "Mailing Address",
+    "Residential Address",
+    "Address 1",
+    "Address1",
+  ],
   military_branch: ["Military Branch", "Military", "Branch", "Service Branch"], // branch only
   beneficiary_name: ["beneficiary", "Beneficiary", "beneficiary_name", "Beneficiary Name"],
   lead_type: ["lead_type", "Lead Type", "Type", "Product"],
@@ -345,6 +369,7 @@ export const handler = async (event) => {
         phone_e164,
         email: email || null,
         state: m.state || null,
+        address: m.address || null,       // 👈 NEW
         dob: dobISO || null,
         age: Number.isFinite(numericAge) ? numericAge : null,
         military_branch: m.military_branch || null, // branch only, status ignored
