@@ -20,6 +20,9 @@ import AgentAvailability from "./pages/AgentAvailability.jsx";
 // Auth'd pages
 import Leads from "./pages/Leads.jsx";
 
+// 🔹 NEW: Trade Center page (for all authed users)
+import TradeCenter from "./pages/TradeCenter.jsx";
+
 // Manager pages (gated)
 import ManagerDashboard from "./pages/ManagerDashboard.jsx";
 import ManagerImports from "./pages/ManagerImports.jsx";
@@ -55,6 +58,7 @@ export default function App() {
     "/get-my-landing-page",
     "/me",
     "/leads",
+    "/trades", // 🔹 NEW: Trade Center is a known app route
     "/manager",
     "/manager/imports",
     "/manager/leads",
@@ -104,6 +108,9 @@ export default function App() {
       {/* Auth required */}
       <Route element={<ProtectedRoute />}>
         <Route path="/leads" element={<Leads />} />
+
+        {/* 🔹 NEW: Trade Center (any authed user: agent or manager) */}
+        <Route path="/trades" element={<TradeCenter />} />
 
         {/* Agent site (tabbed) */}
         <Route path="/my-landing-page" element={<MyLandingPage />}>
