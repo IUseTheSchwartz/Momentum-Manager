@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 
-const LEAD_TYPES = ["FEX", "VET", "IUL", "TRUCKER", "MORTGAGE", "ILC"];
+const LEAD_TYPES = ["FEX", "VET", "IUL", "TRUCKER", "MORTGAGE", "ILC", "FRESH"];
 
 export default function ManagerImports() {
   const [file, setFile] = useState(null);
