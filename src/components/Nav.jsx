@@ -84,8 +84,7 @@ export default function Nav() {
                 <Link to="/manager">Manager</Link>
                 <Link to="/manager/imports">Imports</Link>
                 <Link to="/manager/leads">All Leads</Link>
-                <Link to="/manager/invites">Invites</Link>
-                <Link to="/manager/members">Members</Link>
+                {/* Invites / Members removed */}
               </>
             )}
 
