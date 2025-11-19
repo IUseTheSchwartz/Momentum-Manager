@@ -1,4 +1,3 @@
-// File: src/components/Nav.jsx
 import { Link, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
@@ -19,7 +18,7 @@ export default function Nav() {
 
   const hideLinks =
     HIDE_LINKS_PATHS.has(loc.pathname) ||
-    loc.pathname.startsWith("/my-landing-page"); // hide for all tabs
+    loc.pathname.startsWith("/my-landing-page");
 
   useEffect(() => {
     let mounted = true;
@@ -77,14 +76,18 @@ export default function Nav() {
 
         {!hideLinks && (
           <nav className="flex gap-4 text-sm items-center">
-            {authed && <Link to="/leads">Leads</Link>}
+            {authed && (
+              <>
+                <Link to="/leads">Leads</Link>
+                <Link to="/trades">Trade Center</Link>
+              </>
+            )}
 
             {authed && role === "manager" && (
               <>
                 <Link to="/manager">Manager</Link>
                 <Link to="/manager/imports">Imports</Link>
                 <Link to="/manager/leads">All Leads</Link>
-                {/* Invites / Members removed */}
               </>
             )}
 
