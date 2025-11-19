@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabaseClient";
 import { fmtMDY } from "../lib/dateFmt";
 
 const LEAD_TYPES = ["FEX", "VET", "IUL", "TRUCKER", "MORTGAGE", "ILC", "FRESH"];
+const PAGE_SIZE = 200;
 
 export default function ManagerLeads() {
   const [rows, setRows] = useState([]);
@@ -20,21 +21,48 @@ export default function ManagerLeads() {
   const [statusMsg, setStatusMsg] = useState("");
   const [managerId, setManagerId] = useState(null);
 
+  // Pagination
+  const [page, setPage] = useState(1);
+
   async function load() {
-    const [{ data: leads }, { data: agents }] = await Promise.all([
-      supabase
+    // Fetch leads in pages so we bypass the 1000-row API cap
+    const pageSize = 1000;
+    const maxTotal = 10000; // safety cap
+    let allLeads = [];
+    let from = 0;
+
+    while (allLeads.length < maxTotal) {
+      const to = from + pageSize - 1;
+      const { data, error } = await supabase
         .from("leads")
         .select(
           "id,first_name,last_name,phone_e164,email,state,address,military_branch,dob,age,lead_type,beneficiary_name,status,assigned_to,created_at"
         )
         .order("created_at", { ascending: false })
-        .limit(5000),
-      supabase
-        .from("user_profiles")
-        .select("id, full_name, email")
-        .order("full_name", { ascending: true }),
-    ]);
-    setRows(leads || []);
+        .range(from, to);
+
+      if (error) {
+        console.error("[ManagerLeads] leads load error:", error);
+        break;
+      }
+      if (!data || data.length === 0) break;
+
+      allLeads = allLeads.concat(data);
+
+      if (data.length < pageSize) break; // reached end
+      from += pageSize;
+    }
+
+    const { data: agents, error: agentErr } = await supabase
+      .from("user_profiles")
+      .select("id, full_name, email")
+      .order("full_name", { ascending: true });
+
+    if (agentErr) {
+      console.error("[ManagerLeads] agents load error:", agentErr);
+    }
+
+    setRows(allLeads || []);
     setUsers(agents || []);
   }
 
@@ -45,6 +73,11 @@ export default function ManagerLeads() {
       await load();
     })();
   }, []);
+
+  // Reset to page 1 when filters or total rows change
+  useEffect(() => {
+    setPage(1);
+  }, [stateFilter, typeFilter, onlyUnassigned, search, rows.length]);
 
   const filtered = useMemo(() => {
     const s = stateFilter.trim().toUpperCase();
@@ -72,13 +105,24 @@ export default function ManagerLeads() {
     });
   }, [rows, stateFilter, typeFilter, onlyUnassigned, search]);
 
-  // ---- Stats based on CURRENT filter ----
+  // Stats
   const totalFiltered = filtered.length;
   const assignedCount = filtered.reduce(
     (acc, r) => acc + (r.assigned_to ? 1 : 0),
     0
   );
   const unassignedCount = totalFiltered - assignedCount;
+
+  // Pagination derived values
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const startIndex = (currentPage - 1) * PAGE_SIZE;
+  const pageRows = filtered.slice(startIndex, startIndex + PAGE_SIZE);
+
+  function goToPage(p) {
+    const next = Math.min(Math.max(p, 1), totalPages);
+    setPage(next);
+  }
 
   async function quickAssign() {
     setStatusMsg("Assigning…");
@@ -102,7 +146,7 @@ export default function ManagerLeads() {
       return;
     }
     setStatusMsg(`Assigned ${j.assigned} leads`);
-    load();
+    await load();
   }
 
   async function unassignOne(leadId) {
@@ -120,7 +164,7 @@ export default function ManagerLeads() {
     setStatusMsg(
       `Unassigned ${j.unassigned} lead${j.unassigned === 1 ? "" : "s"}`
     );
-    load();
+    await load();
   }
 
   // Delete lead (no confirm)
@@ -136,6 +180,12 @@ export default function ManagerLeads() {
 
     setRows((prev) => prev.filter((l) => l.id !== leadId));
     setStatusMsg("Lead deleted");
+  }
+
+  // Simple page number list (1,2,3,4,5...)
+  const pageNumbers = [];
+  for (let i = 1; i <= totalPages; i++) {
+    pageNumbers.push(i);
   }
 
   return (
@@ -162,6 +212,10 @@ export default function ManagerLeads() {
           Assigned:{" "}
           <span className="font-semibold">{assignedCount}</span>, Unassigned:{" "}
           <span className="font-semibold">{unassignedCount}</span>
+        </div>
+        <div className="text-xs text-white/40">
+          Page {currentPage} of {totalPages} (showing up to {PAGE_SIZE} leads
+          per page)
         </div>
       </div>
 
@@ -227,7 +281,7 @@ export default function ManagerLeads() {
           placeholder="Search name/phone/email"
         />
 
-        <div className="col-span-full flex gap-3">
+        <div className="col-span-full flex flex-wrap gap-3 items-center">
           <button
             className="btn btn-primary"
             onClick={quickAssign}
@@ -235,8 +289,35 @@ export default function ManagerLeads() {
           >
             Quick Assign
           </button>
-          <div className="text-sm text-white/60 self-center">
-            {statusMsg}
+          <div className="text-sm text-white/60">{statusMsg}</div>
+
+          {/* Pagination controls */}
+          <div className="ml-auto flex items-center gap-2 text-xs">
+            <button
+              className="px-2 py-1 border border-white/10 rounded disabled:opacity-40"
+              onClick={() => goToPage(currentPage - 1)}
+              disabled={currentPage <= 1}
+            >
+              Prev
+            </button>
+            {pageNumbers.map((p) => (
+              <button
+                key={p}
+                className={`px-2 py-1 border border-white/10 rounded ${
+                  p === currentPage ? "bg-white/20" : ""
+                }`}
+                onClick={() => goToPage(p)}
+              >
+                {p}
+              </button>
+            ))}
+            <button
+              className="px-2 py-1 border border-white/10 rounded disabled:opacity-40"
+              onClick={() => goToPage(currentPage + 1)}
+              disabled={currentPage >= totalPages}
+            >
+              Next
+            </button>
           </div>
         </div>
       </div>
@@ -262,7 +343,7 @@ export default function ManagerLeads() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((l) => (
+            {pageRows.map((l) => (
               <tr key={l.id} className="border-t border-white/10">
                 <td className="px-1 py-1">
                   {[l.first_name, l.last_name].filter(Boolean).join(" ") ||
@@ -314,7 +395,7 @@ export default function ManagerLeads() {
                 </td>
               </tr>
             ))}
-            {!filtered.length && (
+            {!pageRows.length && (
               <tr>
                 <td className="p-3 text-white/60" colSpan={13}>
                   No leads.
