@@ -69,6 +69,14 @@ export default function ManagerLeads() {
     });
   }, [rows, stateFilter, typeFilter, onlyUnassigned, search]);
 
+  // ---- Stats based on CURRENT filter ----
+  const totalFiltered = filtered.length;
+  const assignedCount = filtered.reduce(
+    (acc, r) => acc + (r.assigned_to ? 1 : 0),
+    0
+  );
+  const unassignedCount = totalFiltered - assignedCount;
+
   async function quickAssign() {
     setStatusMsg("Assigning…");
     const payload = {
@@ -129,7 +137,30 @@ export default function ManagerLeads() {
 
   return (
     <section className="mt-6 space-y-6">
-      <h2 className="text-xl font-semibold">All Leads</h2>
+      <div className="flex flex-col gap-1">
+        <h2 className="text-xl font-semibold">All Leads</h2>
+        <div className="text-sm text-white/60">
+          Showing <span className="font-semibold">{totalFiltered}</span>{" "}
+          lead{totalFiltered === 1 ? "" : "s"}
+          {typeFilter && (
+            <>
+              {" "}
+              for type <span className="font-semibold">{typeFilter}</span>
+            </>
+          )}
+          {stateFilter && (
+            <>
+              {" "}
+              in <span className="font-semibold">{stateFilter}</span>
+            </>
+          )}
+          {onlyUnassigned && <> (only unassigned)</>}
+          {" — "}
+          Assigned:{" "}
+          <span className="font-semibold">{assignedCount}</span>, Unassigned:{" "}
+          <span className="font-semibold">{unassignedCount}</span>
+        </div>
+      </div>
 
       {/* Controls */}
       <div className="card p-4 grid lg:grid-cols-6 md:grid-cols-3 sm:grid-cols-2 gap-3">
