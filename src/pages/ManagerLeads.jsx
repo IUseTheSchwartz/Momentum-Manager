@@ -52,8 +52,11 @@ export default function ManagerLeads() {
     const q = search.trim().toLowerCase();
 
     return (rows || []).filter((r) => {
-      if (s && (r.state || "").toUpperCase() !== s) return false;
-      if (t && (r.lead_type || "").toUpperCase() !== t) return false;
+      const rowState = String(r.state || "").trim().toUpperCase();
+      const rowType = String(r.lead_type || "").trim().toUpperCase();
+
+      if (s && rowState !== s) return false;
+      if (t && rowType !== t) return false;
       if (onlyUnassigned && r.assigned_to) return false;
 
       if (!q) return true;
@@ -282,8 +285,12 @@ export default function ManagerLeads() {
                   {l.status.replaceAll("_", " ")}
                 </td>
                 <td className="px-1 py-1">
-                  {users.find((u) => u.id === l.assigned_to)?.full_name ||
-                    (l.assigned_to ? "—" : "Unassigned")}
+                  {(() => {
+                    if (!l.assigned_to) return "Unassigned";
+                    const u = users.find((u) => u.id === l.assigned_to);
+                    if (!u) return "—";
+                    return u.full_name || u.email || "—";
+                  })()}
                 </td>
                 <td className="px-1 py-1">
                   <div className="flex gap-2">
