@@ -1,3 +1,4 @@
+// File: src/pages/Leads.jsx (Agent view)
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { fmtMDY } from "../lib/dateFmt";
@@ -43,7 +44,7 @@ export default function Leads() {
       const slice = list.slice(i, i + chunk);
       const res = await supabase
         .from("leads")
-        .select("id, first_name, last_name, phone_e164, email, state, military_branch, dob, age, lead_type, beneficiary_name, assigned_to, created_at")
+        .select("id, first_name, last_name, phone_e164, email, state, address, military_branch, dob, age, lead_type, beneficiary_name, assigned_to, created_at")
         .in("id", slice);
       if (!res.error) batched.push(...(res.data || []));
     }
@@ -143,6 +144,7 @@ export default function Leads() {
               <th className="text-left p-3">Phone</th>
               <th className="text-left p-3">Email</th>
               <th className="text-left p-3">State</th>
+              <th className="text-left p-3">Address</th>
               <th className="text-left p-3">Military</th>
               <th className="text-left p-3">DOB</th>
               <th className="text-left p-3">Age</th>
@@ -162,6 +164,7 @@ export default function Leads() {
                   <td className="p-3">{l.phone_e164 || "—"}</td>
                   <td className="p-3">{l.email || "—"}</td>
                   <td className="p-3">{l.state || "—"}</td>
+                  <td className="p-3">{l.address || "—"}</td>
                   <td className="p-3">{l.military_branch || "—"}</td>
                   <td className="p-3">{fmtMDY(l.dob)}</td>
                   <td className="p-3">{(l.age ?? "") !== "" ? l.age : "—"}</td>
@@ -183,7 +186,7 @@ export default function Leads() {
               );
             })}
             {!filtered.length && (
-              <tr><td className="p-4 text-white/50" colSpan={11}>No leads yet.</td></tr>
+              <tr><td className="p-4 text-white/50" colSpan={12}>No leads yet.</td></tr>
             )}
           </tbody>
         </table>
