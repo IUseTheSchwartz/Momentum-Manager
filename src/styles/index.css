@@ -3,7 +3,8 @@
 @tailwind utilities;
 
 :root {
-  --bg: #0b0b0c;
+  /* 🔹 Change this from #0b0b0c to pure black */
+  --bg: #000000;
   --panel: rgba(255,255,255,0.04);
   --border: rgba(255,255,255,0.12);
   --text: #e6e7ea;
@@ -14,11 +15,34 @@
 }
 
 html, body, #root { height: 100%; }
-body { background: var(--bg); color: var(--text); }
-.card { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; }
-.btn { border: 1px solid var(--border); padding: 10px 14px; border-radius: 12px; }
-.btn-primary { background: linear-gradient(180deg,#bfc5cf,#6e7785); color:#0b0b0c; font-weight:600; }
-a { color: var(--accent); }
+
+/* This now uses --bg which is pure black */
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+
+.btn {
+  border: 1px solid var(--border);
+  padding: 10px 14px;
+  border-radius: 12px;
+}
+
+.btn-primary {
+  background: linear-gradient(180deg,#bfc5cf,#6e7785);
+  color:#0b0b0c;
+  font-weight:600;
+}
+
+a {
+  color: var(--accent);
+}
 
 /* === Native <select> readability in dark mode ========================== */
 select {
