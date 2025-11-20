@@ -8,8 +8,9 @@
   --border: rgba(255,255,255,0.12);
   --text: #e6e7ea;
 
-  /* NEW: Isle-of-man style green accent */
-  --accent: #22c55e; /* you can tweak: #16a34a or #10b981 if you like it deeper */
+  /* Isle of Man / landing-page emerald */
+  /* Tailwind emerald-400: #34d399 */
+  --accent: #34d399;
 
   /* Make form controls (incl. <select> menus) render with dark OS styling */
   color-scheme: dark;
@@ -30,9 +31,9 @@ body { background: var(--bg); color: var(--text); }
   border-radius: 12px;
 }
 
-/* NEW: green primary button */
+/* Primary button: emerald like hero accent, but a little deeper on bottom */
 .btn-primary {
-  background: linear-gradient(180deg, #22c55e, #15803d);
+  background: linear-gradient(180deg, #34d399, #059669); /* emerald-400 → emerald-600 */
   color:#0b0b0c;
   font-weight:600;
 }
@@ -53,8 +54,8 @@ select {
 
 select:focus {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(34,197,94,.55); /* green-ish focus ring */
-  border-color: rgba(34,197,94,.6);
+  box-shadow: 0 0 0 2px rgba(52,211,153,.55); /* emerald-400-ish focus ring */
+  border-color: rgba(52,211,153,.6);
 }
 
 /* Options inside the dropdown */
