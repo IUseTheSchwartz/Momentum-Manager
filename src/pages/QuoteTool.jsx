@@ -48,8 +48,8 @@ function LinkButton({ label, href }) {
 
 export default function QuoteTool() {
   return (
-    <div className="min-h-screen bg-[#0b0b0c] text-white px-4 pb-24 pt-10">
-      <section className="max-w-5xl mx-auto">
+    <section className="pt-4 pb-24">
+      <div className="max-w-5xl mx-auto">
         <p className="text-xs uppercase tracking-[0.25em] text-emerald-400/80 mb-2">
           MOMENTUM MANAGER
         </p>
@@ -116,7 +116,7 @@ export default function QuoteTool() {
           For agents only. Bookmark this page and keep it open in a tab when
           you&apos;re running appointments.
         </p>
-      </section>
-    </div>
+      </div>
+    </section>
   );
 }
