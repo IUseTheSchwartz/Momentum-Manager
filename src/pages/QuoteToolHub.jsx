@@ -4,10 +4,11 @@ import QuoteTool from "./QuoteTool.jsx";
 
 export default function QuoteToolHub() {
   return (
-    <div className="min-h-screen bg-[#0b0b0c] text-white">
+    <div className="min-h-screen text-white bg-[#0b0b0c]">
       {/* Hamburger header only */}
       <HubHamburger />
-      <main className="px-6 pb-24">
+
+      <main className="px-4 pb-24">
         <QuoteTool />
       </main>
     </div>
