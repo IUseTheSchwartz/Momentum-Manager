@@ -123,8 +123,8 @@ export default function App() {
         {/* Trade Center (any authed user: agent or manager) */}
         <Route path="/trades" element={<TradeCenter />} />
 
-        {/* Quote Tool inside app shell (shows top Nav, max-width container) */}
-        <Route path="/quote-tool" element={<QuoteTool />} />
+        {/* Quote Tool inside app shell (NO header text here) */}
+        <Route path="/quote-tool" element={<QuoteTool showHeader={false} />} />
 
         {/* Quote Tool hub variant (no top Nav, but still requires auth) */}
         <Route path="/quote-tool-hub" element={<QuoteToolHub />} />
