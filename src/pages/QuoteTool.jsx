@@ -46,20 +46,26 @@ function LinkButton({ label, href }) {
   );
 }
 
-export default function QuoteTool() {
+// showHeader = true → header text shown (hub version)
+// showHeader = false → just the cards (nav/app version)
+export default function QuoteTool({ showHeader = true }) {
   return (
     <section className="max-w-5xl mx-auto pt-8 text-white">
-      <p className="text-xs uppercase tracking-[0.25em] text-emerald-400/80 mb-2">
-        MOMENTUM MANAGER
-      </p>
-      <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-2">
-        Quote &amp; E-App Tool
-      </h1>
-      <p className="text-sm sm:text-base text-white/70 mb-8 max-w-2xl">
-        One place for your carrier quoters, cheat sheets, and e-app portals.
-        Use this page while you&apos;re in the sit so you aren&apos;t digging
-        through bookmarks.
-      </p>
+      {showHeader && (
+        <>
+          <p className="text-xs uppercase tracking-[0.25em] text-emerald-400/80 mb-2">
+            MOMENTUM MANAGER
+          </p>
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-2">
+            Quote &amp; E-App Tool
+          </h1>
+          <p className="text-sm sm:text-base text-white/70 mb-8 max-w-2xl">
+            One place for your carrier quoters, cheat sheets, and e-app portals.
+            Use this page while you&apos;re in the sit so you aren&apos;t digging
+            through bookmarks.
+          </p>
+        </>
+      )}
 
       <div className="grid gap-5 md:grid-cols-3">
         {/* Carrier Quote */}
