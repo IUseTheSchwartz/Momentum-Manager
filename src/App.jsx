@@ -20,11 +20,12 @@ import AgentAvailability from "./pages/AgentAvailability.jsx";
 // Auth'd pages
 import Leads from "./pages/Leads.jsx";
 
-// 🔹 NEW: Trade Center page (for all authed users)
+// Trade Center page (for all authed users)
 import TradeCenter from "./pages/TradeCenter.jsx";
 
-// 🔹 NEW: Quote Tool page (for all authed users)
-import QuoteTool from "./pages/QuoteTool.jsx";
+// Quote Tool pages
+import QuoteTool from "./pages/QuoteTool.jsx";       // app-shell version
+import QuoteToolHub from "./pages/QuoteToolHub.jsx"; // hamburger / hub version
 
 // Manager pages (gated)
 import ManagerDashboard from "./pages/ManagerDashboard.jsx";
@@ -61,8 +62,9 @@ export default function App() {
     "/get-my-landing-page",
     "/me",
     "/leads",
-    "/trades", // 🔹 Trade Center is a known app route
-    "/quote-tool", // 🔹 NEW: Quote Tool route
+    "/trades",
+    "/quote-tool",       // app-shell quote tool
+    "/quote-tool-hub",   // hub/hamburger quote tool
     "/manager",
     "/manager/imports",
     "/manager/leads",
@@ -81,8 +83,13 @@ export default function App() {
   const isSingleSegment = /^\/[^/]+$/.test(path);
   const isPublicAgentLanding = isSingleSegment && !knownPaths.has(path);
 
-  // Also treat booking flow shells as "public shell" pages with no app Nav
-  const PUBLIC_SHELL_PATHS = new Set(["/schedule", "/thank-you", "/reschedule"]);
+  // "Shell" pages render full-bleed without Nav (schedule, thank-you, reschedule, hub quote tool)
+  const PUBLIC_SHELL_PATHS = new Set([
+    "/schedule",
+    "/thank-you",
+    "/reschedule",
+    "/quote-tool-hub", // 👈 hub-only quote tool variant (no top Nav)
+  ]);
   const isPublicShell = isPublicAgentLanding || PUBLIC_SHELL_PATHS.has(path);
 
   const routes = (
@@ -113,11 +120,14 @@ export default function App() {
       <Route element={<ProtectedRoute />}>
         <Route path="/leads" element={<Leads />} />
 
-        {/* 🔹 Trade Center (any authed user: agent or manager) */}
+        {/* Trade Center (any authed user: agent or manager) */}
         <Route path="/trades" element={<TradeCenter />} />
 
-        {/* 🔹 Quote Tool (any authed user: agent or manager) */}
+        {/* Quote Tool inside app shell (shows top Nav, max-width container) */}
         <Route path="/quote-tool" element={<QuoteTool />} />
+
+        {/* Quote Tool hub variant (no top Nav, but still requires auth) */}
+        <Route path="/quote-tool-hub" element={<QuoteToolHub />} />
 
         {/* Agent site (tabbed) */}
         <Route path="/my-landing-page" element={<MyLandingPage />}>
@@ -144,7 +154,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen">
-      {/* Hide Nav on public agent landing + booking shell pages */}
+      {/* Hide Nav on public agent landing + shell pages (schedule, reschedule, hub quote tool) */}
       {!isPublicShell && <Nav />}
 
       {/* Public shells render full-bleed; app pages use centered container */}
