@@ -1,3 +1,4 @@
+// File: src/components/Nav.jsx
 import { Link, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
@@ -80,6 +81,7 @@ export default function Nav() {
               <>
                 <Link to="/leads">Leads</Link>
                 <Link to="/trades">Trade Center</Link>
+                <Link to="/quote-tool">Quote Tool</Link>
               </>
             )}
 
