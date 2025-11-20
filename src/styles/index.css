@@ -3,53 +3,76 @@
 @tailwind utilities;
 
 :root {
-  --bg: #0b0b0c;
-  --panel: rgba(255,255,255,0.04);
-  --border: rgba(255,255,255,0.12);
-  --text: #e6e7ea;
-  --accent: #cfd2d8; /* chrome/silver */
+  --bg: #000000; /* true black */
+  --panel: rgba(255, 255, 255, 0.04);
+  --border: rgba(255, 255, 255, 0.12);
+  --text: #f9fafb; /* near-white */
+  --accent: #3b82f6; /* blue accent */
 
-  /* Make form controls (incl. <select> menus) render with dark OS styling */
+  /* dark-mode form controls */
   color-scheme: dark;
 }
 
-html, body, #root { height: 100%; }
-body { background: var(--bg); color: var(--text); }
-.card { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; }
-.btn { border: 1px solid var(--border); padding: 10px 14px; border-radius: 12px; }
-.btn-primary { background: linear-gradient(180deg,#bfc5cf,#6e7785); color:#0b0b0c; font-weight:600; }
-a { color: var(--accent); }
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+
+.btn {
+  border: 1px solid var(--border);
+  padding: 10px 14px;
+  border-radius: 12px;
+}
+
+.btn-primary {
+  background: linear-gradient(180deg, #60a5fa, #1d4ed8); /* blue gradient */
+  color: #020617;
+  font-weight: 600;
+}
+
+a {
+  color: var(--accent);
+}
 
 /* === Native <select> readability in dark mode ========================== */
 select {
-  background-color: #111318;          /* dark panel */
+  background-color: #020617;
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 8px 12px;
-  color-scheme: dark;                  /* ensure dark popup on supported OS/browsers */
+  color-scheme: dark;
 }
 
 select:focus {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(99,102,241,.55); /* indigo-ish focus ring */
-  border-color: rgba(99,102,241,.6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.6);
+  border-color: rgba(59, 130, 246, 0.8);
 }
 
-/* Options inside the dropdown */
 select option,
 select optgroup {
-  background-color: #0f1116;           /* popup background */
+  background-color: #020617;
   color: var(--text);
 }
 
-/* Disabled options still readable but muted */
 select option:disabled {
-  color: #6b7280;                       /* gray-500 */
+  color: #6b7280;
 }
 
-/* Placeholder-style first option (if you use it) */
 select:invalid,
 select option[disabled][selected] {
-  color: #9ca3af;                       /* gray-400 placeholder */
+  color: #9ca3af;
 }
