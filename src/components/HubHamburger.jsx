@@ -35,7 +35,7 @@ export default function HubHamburger() {
               Momentum Lead Manager
             </Link>
             <Link
-              to="/quote-tool"
+              to="/quote-tool-hub"
               className="block px-4 py-2 hover:bg-white/5"
               onClick={() => setMenuOpen(false)}
             >
