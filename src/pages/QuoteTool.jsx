@@ -46,8 +46,8 @@ function LinkButton({ label, href }) {
   );
 }
 
-// showHeader = true → header text shown (hub version)
-// showHeader = false → just the cards (nav/app version)
+// showHeader = true → header text visible (hub version)
+// showHeader = false → no header (nav/app version)
 export default function QuoteTool({ showHeader = true }) {
   return (
     <section className="max-w-5xl mx-auto pt-8 text-white">
