@@ -1,3 +1,4 @@
+// File: src/components/HubHamburger.jsx
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -32,6 +33,13 @@ export default function HubHamburger() {
               onClick={() => setMenuOpen(false)}
             >
               Momentum Lead Manager
+            </Link>
+            <Link
+              to="/quote-tool"
+              className="block px-4 py-2 hover:bg-white/5"
+              onClick={() => setMenuOpen(false)}
+            >
+              Quote Tool
             </Link>
             <Link
               to="/get-my-landing-page"
