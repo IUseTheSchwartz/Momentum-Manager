@@ -48,75 +48,73 @@ function LinkButton({ label, href }) {
 
 export default function QuoteTool() {
   return (
-    <section className="pt-4 pb-24">
-      <div className="max-w-5xl mx-auto">
-        <p className="text-xs uppercase tracking-[0.25em] text-emerald-400/80 mb-2">
-          MOMENTUM MANAGER
-        </p>
-        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-2">
-          Quote &amp; E-App Tool
-        </h1>
-        <p className="text-sm sm:text-base text-white/70 mb-8 max-w-2xl">
-          One place for your carrier quoters, cheat sheets, and e-app portals.
-          Use this page while you&apos;re in the sit so you aren&apos;t digging
-          through bookmarks.
-        </p>
+    <section className="max-w-5xl mx-auto pt-8 text-white">
+      <p className="text-xs uppercase tracking-[0.25em] text-emerald-400/80 mb-2">
+        MOMENTUM MANAGER
+      </p>
+      <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-2">
+        Quote &amp; E-App Tool
+      </h1>
+      <p className="text-sm sm:text-base text-white/70 mb-8 max-w-2xl">
+        One place for your carrier quoters, cheat sheets, and e-app portals.
+        Use this page while you&apos;re in the sit so you aren&apos;t digging
+        through bookmarks.
+      </p>
 
-        <div className="grid gap-5 md:grid-cols-3">
-          {/* Carrier Quote */}
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 flex flex-col">
-            <div className="mb-3">
-              <h2 className="text-sm font-semibold mb-1">Carrier Quote</h2>
-              <p className="text-xs text-white/60">
-                Quick links to carrier quote tools so you can ballpark coverage
-                on the fly.
-              </p>
-            </div>
-            <div className="flex flex-col gap-2 mt-2">
-              {carrierQuoteLinks.map((item) => (
-                <LinkButton key={item.label} {...item} />
-              ))}
-            </div>
+      <div className="grid gap-5 md:grid-cols-3">
+        {/* Carrier Quote */}
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4 flex flex-col">
+          <div className="mb-3">
+            <h2 className="text-sm font-semibold mb-1">Carrier Quote</h2>
+            <p className="text-xs text-white/60">
+              Quick links to carrier quote tools so you can ballpark coverage on
+              the fly.
+            </p>
           </div>
-
-          {/* Cheat Sheets */}
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 flex flex-col">
-            <div className="mb-3">
-              <h2 className="text-sm font-semibold mb-1">Cheat Sheets</h2>
-              <p className="text-xs text-white/60">
-                High-level cheat sheets you can glance at mid-call to keep the
-                product story tight.
-              </p>
-            </div>
-            <div className="flex flex-col gap-2 mt-2">
-              {cheatSheetLinks.map((item) => (
-                <LinkButton key={item.label} {...item} />
-              ))}
-            </div>
-          </div>
-
-          {/* E-Apps */}
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 flex flex-col">
-            <div className="mb-3">
-              <h2 className="text-sm font-semibold mb-1">E-Apps</h2>
-              <p className="text-xs text-white/60">
-                Jump straight into the carrier e-app portals once the client is
-                locked in.
-              </p>
-            </div>
-            <div className="flex flex-col gap-2 mt-2">
-              {eAppLinks.map((item) => (
-                <LinkButton key={item.label} {...item} />
-              ))}
-            </div>
+          <div className="flex flex-col gap-2 mt-2">
+            {carrierQuoteLinks.map((item) => (
+              <LinkButton key={item.label} {...item} />
+            ))}
           </div>
         </div>
 
-        <p className="mt-8 text-[11px] text-white/40">
-          For agents only. Bookmark this page and keep it open in a tab when
-          you&apos;re running appointments.
-        </p>
+        {/* Cheat Sheets */}
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4 flex flex-col">
+          <div className="mb-3">
+            <h2 className="text-sm font-semibold mb-1">Cheat Sheets</h2>
+            <p className="text-xs text-white/60">
+              High-level cheat sheets you can glance at mid-call to keep the
+              product story tight.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 mt-2">
+            {cheatSheetLinks.map((item) => (
+              <LinkButton key={item.label} {...item} />
+            ))}
+          </div>
+        </div>
+
+        {/* E-Apps */}
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4 flex flex-col">
+          <div className="mb-3">
+            <h2 className="text-sm font-semibold mb-1">E-Apps</h2>
+            <p className="text-xs text-white/60">
+              Jump straight into the carrier e-app portals once the client is
+              locked in.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 mt-2">
+            {eAppLinks.map((item) => (
+              <LinkButton key={item.label} {...item} />
+            ))}
+          </div>
+        </div>
       </div>
+
+      <p className="mt-8 text-[11px] text-white/40">
+        For agents only. Bookmark this page and keep it open in a tab when
+        you&apos;re running appointments.
+      </p>
     </section>
   );
 }
