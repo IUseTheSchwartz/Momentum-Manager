@@ -1,5 +1,5 @@
 // File: src/components/Nav.jsx
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 
@@ -7,6 +7,7 @@ export default function Nav() {
   const [role, setRole] = useState(null);
   const [authed, setAuthed] = useState(false);
   const loc = useLocation();
+  const navigate = useNavigate();
 
   const HIDE_LINKS_PATHS = new Set([
     "/",
@@ -67,6 +68,17 @@ export default function Nav() {
     };
   }, []);
 
+  const handleSignOut = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.warn("[Nav] signOut error:", error);
+      return;
+    }
+    setAuthed(false);
+    setRole(null);
+    navigate("/login");
+  };
+
   return (
     <header className="border-b border-white/10">
       <div className="max-w-6xl mx-auto flex items-center justify-between p-3">
@@ -91,6 +103,16 @@ export default function Nav() {
                 <Link to="/manager/imports">Imports</Link>
                 <Link to="/manager/leads">All Leads</Link>
               </>
+            )}
+
+            {authed && (
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="ml-2 rounded-lg border border-white/15 bg-white/5 px-3 py-1 text-xs hover:bg-white/10 transition"
+              >
+                Sign out
+              </button>
             )}
 
             {!authed && (
