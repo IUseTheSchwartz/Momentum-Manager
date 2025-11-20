@@ -1,3 +1,4 @@
+// File: src/components/Nav.jsx
 import { Link, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
@@ -7,18 +8,9 @@ export default function Nav() {
   const [authed, setAuthed] = useState(false);
   const loc = useLocation();
 
-  const HIDE_LINKS_PATHS = new Set([
-    "/",
-    "/login",
-    "/login-agent",
-    "/signup",
-    "/momentum-lead-manager",
-    "/get-my-landing-page",
-  ]);
-
-  const hideLinks =
-    HIDE_LINKS_PATHS.has(loc.pathname) ||
-    loc.pathname.startsWith("/my-landing-page");
+  // Hide nav links on public auth pages
+  const HIDE_LINKS_PATHS = new Set(["/", "/login", "/signup"]);
+  const hideLinks = HIDE_LINKS_PATHS.has(loc.pathname);
 
   useEffect(() => {
     let mounted = true;
@@ -67,11 +59,15 @@ export default function Nav() {
   }, []);
 
   return (
-    <header className="border-b border-white/10">
+    <header className="border-b border-white/10 bg-black/95 backdrop-blur">
       <div className="max-w-6xl mx-auto flex items-center justify-between p-3">
+        {/* Top-left logo */}
         <Link to="/" className="flex items-center gap-3">
-          <img src="/logo.png" alt="MF" className="h-8 w-8" />
-          <span className="font-semibold">Momentum Manager</span>
+          <img
+            src="/flow-state-logo.png"
+            alt="Flow State Financial"
+            className="h-8 w-auto"
+          />
         </Link>
 
         {!hideLinks && (
