@@ -51,7 +51,7 @@ function LinkButton({ label, href }) {
       href={href}
       target="_blank"
       rel="noreferrer"
-      className="w-full text-xs sm:text-sm font-medium rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-left text-white hover:border-emerald-400/70 hover:bg-emerald-400/10 transition"
+      className="w-full text-xs sm:text-sm font-medium rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-left text-[#e6e7ea] hover:border-emerald-400/70 hover:bg-emerald-400/10 transition"
     >
       {label}
     </a>
