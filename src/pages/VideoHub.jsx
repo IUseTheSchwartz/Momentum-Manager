@@ -54,7 +54,7 @@ export default function VideoHub() {
           <p className="text-xs text-white/60 mb-6 max-w-xl mx-auto">
             Upload your raw clips to{" "}
             <span className="font-semibold">Google Drive</span>, paste the link,
-            and get back finished 9:16 videos.{" "}
+            and get back a finished instagram reel.{" "}
             <span className="font-semibold">Max video length is 10 minutes</span>
             , and edits can take{" "}
             <span className="font-semibold">up to a week</span> depending on
