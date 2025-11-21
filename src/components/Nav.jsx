@@ -16,6 +16,7 @@ export default function Nav() {
     "/signup",
     "/momentum-lead-manager",
     "/get-my-landing-page",
+    "/videos", // 🔥 hide nav links on Video Hub tool page
   ]);
 
   const hideLinks =
