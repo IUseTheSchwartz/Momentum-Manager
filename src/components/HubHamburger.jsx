@@ -27,6 +27,7 @@ export default function HubHamburger() {
             >
               Home
             </Link>
+
             <Link
               to="/momentum-lead-manager"
               className="block px-4 py-2 hover:bg-white/5"
@@ -34,7 +35,17 @@ export default function HubHamburger() {
             >
               Momentum Lead Manager
             </Link>
-            {/* NEW: public video hub marketing page */}
+
+            {/* My Landing Page directly under Lead Manager */}
+            <Link
+              to="/my-landing-page"
+              className="block px-4 py-2 hover:bg-white/5"
+              onClick={() => setMenuOpen(false)}
+            >
+              My Landing Page
+            </Link>
+
+            {/* Video Hub + other tools */}
             <Link
               to="/video-hub"
               className="block px-4 py-2 hover:bg-white/5"
@@ -56,7 +67,9 @@ export default function HubHamburger() {
             >
               Get My Landing Page
             </Link>
+
             <div className="border-t border-white/10 mt-1" />
+
             <Link
               to="/signup"
               className="block px-4 py-2 hover:bg-white/5"
