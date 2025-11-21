@@ -94,8 +94,6 @@ export default function Nav() {
                 <Link to="/leads">Leads</Link>
                 <Link to="/trades">Trade Center</Link>
                 <Link to="/quote-tool">Quote Tool</Link>
-                {/* NEW: in-app Video Hub */}
-                <Link to="/videos">Videos</Link>
               </>
             )}
 
