@@ -9,13 +9,6 @@ const STATUS_COLORS = {
   completed: "bg-green-900/30 text-green-100",
 };
 
-const PLATFORMS = [
-  { value: "reels", label: "Instagram Reels" },
-  { value: "tiktok", label: "TikTok" },
-  { value: "shorts", label: "YouTube Shorts" },
-  { value: "other", label: "Other" },
-];
-
 function classNames(...parts) {
   return parts.filter(Boolean).join(" ");
 }
@@ -39,11 +32,8 @@ export default function Videos() {
   const [savingQueue, setSavingQueue] = useState(false);
   const [sendingVideo, setSendingVideo] = useState(false);
 
-  // New request form
-  const [reqTitle, setReqTitle] = useState("");
+  // New request form (simplified: just Drive link + notes)
   const [reqDriveLink, setReqDriveLink] = useState("");
-  const [reqMinutes, setReqMinutes] = useState("");
-  const [reqPlatform, setReqPlatform] = useState("reels");
   const [reqNotes, setReqNotes] = useState("");
 
   // Send video form (manager)
@@ -134,12 +124,6 @@ export default function Videos() {
     e.preventDefault();
     if (!userId) return;
 
-    const minutes = Number(reqMinutes || "0");
-
-    if (!reqTitle.trim()) {
-      alert("Please add a title for this video.");
-      return;
-    }
     if (!reqDriveLink.trim()) {
       alert("Please paste your Google Drive link.");
       return;
@@ -150,23 +134,18 @@ export default function Videos() {
       );
       if (!ok) return;
     }
-    if (!minutes || minutes <= 0) {
-      alert("Please enter the approximate length in minutes (1–10).");
-      return;
-    }
-    if (minutes > 10) {
-      alert("Max video length is 10 minutes. Please trim your clip first.");
-      return;
-    }
+
+    // Auto-generate a simple title so the DB not-null constraint is happy
+    const autoTitle = `Video request - ${new Date().toLocaleString()}`;
 
     setSavingRequest(true);
     try {
       const { error } = await supabase.from("video_edit_requests").insert({
         owner_user_id: userId,
-        title: reqTitle.trim(),
+        title: autoTitle,
         drive_link_raw: reqDriveLink.trim(),
-        approx_minutes: minutes,
-        platform: reqPlatform,
+        approx_minutes: null,
+        platform: null,
         notes: reqNotes.trim(),
         status: "pending",
       });
@@ -178,10 +157,7 @@ export default function Videos() {
       }
 
       // Clear form & reload
-      setReqTitle("");
       setReqDriveLink("");
-      setReqMinutes("");
-      setReqPlatform("reels");
       setReqNotes("");
 
       await loadMyRequests(userId, setMyRequests);
@@ -373,7 +349,7 @@ export default function Videos() {
 
           {activeTab === "requests" ? (
             <section className="space-y-6">
-              {/* Create request */}
+              {/* Create request (simplified form) */}
               <form
                 onSubmit={handleCreateRequest}
                 className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-4"
@@ -385,41 +361,6 @@ export default function Videos() {
                   <p className="text-[11px] text-white/60">
                     Max length: 10 minutes · Turnaround: up to 7 days
                   </p>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <label className="text-xs text-white/70">
-                      Title <span className="text-red-400">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      className="w-full rounded-lg bg-slate-950/60 border border-white/15 px-3 py-2 text-sm outline-none focus:border-white/40"
-                      placeholder="e.g. Sit-down answer clip"
-                      value={reqTitle}
-                      onChange={(e) => setReqTitle(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-xs text-white/70">
-                      Approx. length (minutes){" "}
-                      <span className="text-red-400">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={10}
-                      className="w-full rounded-lg bg-slate-950/60 border border-white/15 px-3 py-2 text-sm outline-none focus:border-white/40"
-                      placeholder="1–10"
-                      value={reqMinutes}
-                      onChange={(e) => setReqMinutes(e.target.value)}
-                    />
-                    <p className="text-[11px] text-white/50">
-                      If your video is longer, trim it down before uploading to
-                      Drive.
-                    </p>
-                  </div>
                 </div>
 
                 <div className="space-y-1">
@@ -435,37 +376,21 @@ export default function Videos() {
                     onChange={(e) => setReqDriveLink(e.target.value)}
                   />
                   <p className="text-[11px] text-white/50">
-                    Make sure link access is set to{" "}
+                    Upload your clip to Google Drive, set it to{" "}
                     <span className="font-semibold">Anyone with the link</span>{" "}
-                    so it can be downloaded.
+                    and paste the link here. Please keep clips under 10 minutes.
                   </p>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <label className="text-xs text-white/70">Platform</label>
-                    <select
-                      className="w-full rounded-lg bg-slate-950/60 border border-white/15 px-3 py-2 text-sm outline-none focus:border-white/40"
-                      value={reqPlatform}
-                      onChange={(e) => setReqPlatform(e.target.value)}
-                    >
-                      {PLATFORMS.map((p) => (
-                        <option key={p.value} value={p.value}>
-                          {p.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs text-white/70">Notes</label>
-                    <textarea
-                      rows={3}
-                      className="w-full rounded-lg bg-slate-950/60 border border-white/15 px-3 py-2 text-sm outline-none focus:border-white/40 resize-none"
-                      placeholder="Hook to emphasize, what to cut, captions, blur faces, etc."
-                      value={reqNotes}
-                      onChange={(e) => setReqNotes(e.target.value)}
-                    />
-                  </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-white/70">Notes</label>
+                  <textarea
+                    rows={3}
+                    className="w-full rounded-lg bg-slate-950/60 border border-white/15 px-3 py-2 text-sm outline-none focus:border-white/40 resize-none"
+                    placeholder="What you want done (cuts, captions, blur names, etc.)"
+                    value={reqNotes}
+                    onChange={(e) => setReqNotes(e.target.value)}
+                  />
                 </div>
 
                 <div className="flex items-center justify-between gap-3 pt-1">
@@ -504,18 +429,17 @@ export default function Videos() {
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
                           <div className="space-y-0.5">
-                            <p className="font-medium">{r.title}</p>
-                            <p className="text-[11px] text-white/50">
-                              {r.platform
-                                ? PLATFORMS.find(
-                                    (p) => p.value === r.platform
-                                  )?.label || r.platform
-                                : "Platform not specified"}
-                              {" · "}
-                              {r.approx_minutes
-                                ? `${r.approx_minutes} min`
-                                : "Length not set"}
+                            <p className="font-medium">
+                              {r.title || "Video request"}
                             </p>
+                            {r.created_at && (
+                              <p className="text-[11px] text-white/50">
+                                Created{" "}
+                                {new Date(
+                                  r.created_at
+                                ).toLocaleString()}
+                              </p>
+                            )}
                           </div>
                           <span
                             className={classNames(
@@ -639,18 +563,17 @@ export default function Videos() {
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="space-y-0.5">
-                            <p className="font-medium text-sm">{r.title}</p>
-                            <p className="text-[11px] text-white/50">
-                              {r.platform
-                                ? PLATFORMS.find(
-                                    (p) => p.value === r.platform
-                                  )?.label || r.platform
-                                : "Platform not specified"}
-                              {" · "}
-                              {r.approx_minutes
-                                ? `${r.approx_minutes} min`
-                                : "Length not set"}
+                            <p className="font-medium text-sm">
+                              {r.title || "Video request"}
                             </p>
+                            {r.created_at && (
+                              <p className="text-[11px] text-white/50">
+                                Created{" "}
+                                {new Date(
+                                  r.created_at
+                                ).toLocaleString()}
+                              </p>
+                            )}
                             <p className="text-[11px] text-white/45">
                               Owner: {r.owner_user_id}
                             </p>
