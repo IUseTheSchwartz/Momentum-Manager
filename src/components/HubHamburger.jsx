@@ -34,6 +34,14 @@ export default function HubHamburger() {
             >
               Momentum Lead Manager
             </Link>
+            {/* NEW: public video hub marketing page */}
+            <Link
+              to="/video-hub"
+              className="block px-4 py-2 hover:bg-white/5"
+              onClick={() => setMenuOpen(false)}
+            >
+              Video Hub
+            </Link>
             <Link
               to="/quote-tool-hub"
               className="block px-4 py-2 hover:bg-white/5"
