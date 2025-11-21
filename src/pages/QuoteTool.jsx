@@ -5,7 +5,10 @@ const carrierQuoteLinks = [
   { label: "AIG (Simple) SIWL", href: "https://rapid-rater.live.web.corebridgefinancial.com/Simplinowquoter" }, // 2
   { label: "AFLAC", href: "https://producerportal.aflac.com/" }, // 3
   { label: "AMERICO", href: "https://account.americoagent.com/Identity/Account/Login/?returnUrl=https%3a%2f%2ftools.americoagent.com%2f" }, // 4
-  { label: "AETNA", href: "https://www.aetna.com/aimmanageaccount/login?identityTransaction=getzphCU0eHDYva%2FgD8kUvyDvAwzFXd%2BG3uZK1cJMwQZ6yiFetiv3feZBm3rWfIu%2F2rymlZICkWANNk5Qie6FkCuLf%2Fb9W68QkVOa9EP0Lfyv%2BUHsRt6TqAMyXi3udmsgcsPDYldZj1jrkMG%2BEE84krieenUDUP0LypCPQEkHKNk28aIDsxY88wSVzaXURxsKNnS1t1HvRU7qTuK8kCObkrQpnwNRINoFhx7qlaMNkAVCpu%2BUqmr1NmxNR17QakmBVs4%2FEh2N9sSzQVY3TT%2BJL5vUygt31X8YFTQTcKml2HNLR9x51Yli698%2B1WKaZLtGYsqLKQtuCZ5iaR3hSpjbmF8fnfL1PqBg7Wncvg9KQF44PFZcE%2FoGNf%2BXjChEtpK04m%2BQT5yDWSipZTPRANEHxVTtDoghVW%2B54TGzbTpCoS6%2BGaJNt9H8ndQCCWdXBdGb4YjN3EYkmWyogwJsIeQ4l1epunclAOsSmZzWd6PplYP53m0K1MK432SWnr52MVo4BOfBaX7IJAT06NIfcHPtht7e3h1XPPp%2Bk8ry4%2Brx2RZ6%2FsX9xs7b2y02NUiKklBap%2B1Romb0o6BSMATm7axqT1GuIgYONd9Nb2SDQN04kUFKvwiG%2BeNYyQRAWw4D7BqP2VfwStk5mc2xQCNUyJVKA%3D%3D&appname=SSIBroker&branding=aetna&skin=&language=&channel=web&psuid=&biometric_text=&businessdata=channel~aetna|subchannel~broker&business_event=Login" }, // 5
+  {
+    label: "AETNA",
+    href: "https://www.aetna.com/aimmanageaccount/login?identityTransaction=getzphCU0eHDYva%2FgD8kUvyDvAwzFXd%2BG3uZK1cJMwQZ6yiFetiv3feZBm3rWfIu%2F2rymlZICkWANNk5Qie6FkCuLf%2Fb9W68QkVOa9EP0Lfyv%2BUHsRt6TqAMyXi3udmsgcsPDYldZj1jrkMG%2BEE84krieenUDUP0LypCPQEkHKNk28aIDsxY88wSVzaXURxsKNnS1t1HvRU7qTuK8kCObkrQpnwNRINoFhx7qlaMNkAVCpu%2BUqmr1NmxNR17QakmBVs4%2FEh2N9sSzQVY3TT%2BJL5vUygt31X8YFTQTcKml2HNLR9x51Yli698%2B1WKaZLtGYsqLKQtuCZ5iaR3hSpjbmF8fnfL1PqBg7Wncvg9KQF44PFZcE%2FoGNf%2BXjChEtpK04m%2BQT5yDWSipZTPRANEHxVTtDoghVW%2B54TGzbTpCoS6%2BGaJNt9H8ndQCCWdXBdGb4YjN3EYkmWyogwJsIeQ4l1epunclAOsSmZzWd6PplYP53m0K1MK432SWnr52MVo4BOfBaX7IJAT06NIfcHPtht7e3h1XPPp%2Bk8ry4%2Brx2RZ6%2FsX9xs7b2y02NUiKklBap%2B1Romb0o6BSMATm7axqT1GuIgYONd9Nb2SDQN04kUFKvwiG%2BeNYyQRAWw4D7BqP2VfwStk5mc2xQCNUyJVKA%3D%3D&appname=SSIBroker&branding=aetna&skin=&language=&channel=web&psuid=&biometric_text=&businessdata=channel~aetna|subchannel~broker&business_event=Login",
+  }, // 5
   { label: "AMERICAN AMICABLE", href: "https://www.insuranceapplication.com/AppPage/index.html" }, // 6
   { label: "FORESTERS", href: "https://www.forestersmobile.com/" }, // 7
   { label: "MUTUAL OF OMAHA", href: "https://www3.mutualofomaha.com/mobile-quotes/#/home" }, // 8
@@ -15,14 +18,23 @@ const carrierQuoteLinks = [
 ];
 
 const cheatSheetLinks = [
-  { label: "Term Life Cheat Sheet", href: "https://www.fflamerica.com/_files/ugd/002d25_a57f8ca815a64a389f2190f4c1dd08a4.pdf" }, // 12
-  { label: "Whole Life Cheat Sheet", href: "https://83cea077-ef69-458f-ac96-5ba721701b74.filesusr.com/ugd/002d25_42419a49ecfc45d6badcf6579cf9a375.pdf" }, // 13
+  {
+    label: "Term Life Cheat Sheet",
+    href: "https://www.fflamerica.com/_files/ugd/002d25_a57f8ca815a64a389f2190f4c1dd08a4.pdf",
+  }, // 12
+  {
+    label: "Whole Life Cheat Sheet",
+    href: "https://83cea077-ef69-458f-ac96-5ba721701b74.filesusr.com/ugd/002d25_42419a49ecfc45d6badcf6579cf9a375.pdf",
+  }, // 13
 ];
 
 const eAppLinks = [
   { label: "AIG (Guaranteed) GIWL", href: "https://connext.corebridgefinancial.com" }, // 14
   { label: "AIG (Simple) SIWL", href: "https://connext.corebridgefinancial.com" }, // 15
-  { label: "Aetna", href: "https://www.aetna.com/aimmanageaccount/login?identityTransaction=getzphCU0eHDYva%2FgD8kUvyDvAwzFXd%2BG3uZK1cJMwQZ6yiFetiv3feZBm3rWfIu%2F2rymlZICkWANNk5Qie6FkCuLf%2Fb9W68QkVOa9EP0Lfyv%2BUHsRt6TqAMyXi3udmsgcsPDYldZj1jrkMG%2BEE84krieenUDUP0LypCPQEkHKNk28aIDsxY88wSVzaXURxsKNnS1t1HvRU7qTuK8kCObkrQpnwNRINoFhx7qlaMNkAVCpu%2BUqmr1NmxNR17QakmBVs4%2FEh2N9sSzQVY3TT%2BJL5vUygt31X8YFTQTcKml2HNLR9x51Yli698%2B1WKaZLtGYsqLKQtuCZ5iaR3hSpjbmF8fnfL1PqBg7Wncvg9KQF44PFZcE%2FoGNf%2BXjChEtpK04m%2BQT5yDWSipZTPRANEHxVTtDoghVW%2B54TGzbTpCoS6%2BGaJNt9H8ndQCCWdXBdGb4YjN3EYkmWyogwJsIeQ4l1epunclAOsSmZzWd6PplYP53m0K1MK432SWnr52MVo4BOfBaX7IJAT06NIfcHPtht7e3h1XPPp%2Bk8ry4%2Brx2RZ6%2FsX9xs7b2y02NUiKklBap%2B1Romb0o6BSMATm7axqT1GuIgYONd9Nb2SDQN04kUFKvwiG%2BeNYyQRAWw4D7BqP2VfwStk5mc2xQCNUyJVKA%3D%3D&appname=SSIBroker&branding=aetna&skin=&language=&channel=web&psuid=&biometric_text=&businessdata=channel~aetna|subchannel~broker&business_event=Login" }, // 16
+  {
+    label: "Aetna",
+    href: "https://www.aetna.com/aimmanageaccount/login?identityTransaction=getzphCU0eHDYva%2FgD8kUvyDvAwzFXd%2BG3uZK1cJMwQZ6yiFetiv3feZBm3rWfIu%2F2rymlZICkWANNk5Qie6FkCuLf%2Fb9W68QkVOa9EP0Lfyv%2BUHsRt6TqAMyXi3udmsgcsPDYldZj1jrkMG%2BEE84krieenUDUP0LypCPQEkHKNk28aIDsxY88wSVzaXURxsKNnS1t1HvRU7qTuK8kCObkrQpnwNRINoFhx7qlaMNkAVCpu%2BUqmr1NmxNR17QakmBVs4%2FEh2N9sSzQVY3TT%2BJL5vUygt31X8YFTQTcKml2HNLR9x51Yli698%2B1WKaZLtGYsqLKQtuCZ5iaR3hSpjbmF8fnfL1PqBg7Wncvg9KQF44PFZcE%2FoGNf%2BXjChEtpK04m%2BQT5yDWSipZTPRANEHxVTtDoghVW%2B54TGzbTpCoS6%2BGaJNt9H8ndQCCWdXBdGb4YjN3EYkmWyogwJsIeQ4l1epunclAOsSmZzWd6PplYP53m0K1MK432SWnr52MVo4BOfBaX7IJAT06NIfcHPtht7e3h1XPPp%2Bk8ry4%2Brx2RZ6%2FsX9xs7b2y02NUiKklBap%2B1Romb0o6BSMATm7axqT1GuIgYONd9Nb2SDQN04kUFKvwiG%2BeNYyQRAWw4D7BqP2VfwStk5mc2xQCNUyJVKA%3D%3D&appname=SSIBroker&branding=aetna&skin=&language=&channel=web&psuid=&biometric_text=&businessdata=channel~aetna|subchannel~broker&business_event=Login",
+  }, // 16
   { label: "AFLAC", href: "https://producerportal.aflac.com/" }, // 17
   { label: "Americo", href: "https://account.americoagent.com/Identity/Account/Login/?" }, // 18
   { label: "American Amicable", href: "https://www.insuranceapplication.com/AppPage/index.html" }, // 19
@@ -39,15 +51,15 @@ function LinkButton({ label, href }) {
       href={href}
       target="_blank"
       rel="noreferrer"
-      className="w-full text-xs sm:text-sm font-medium rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-left hover:border-emerald-400/70 hover:bg-emerald-400/10 transition"
+      className="w-full text-xs sm:text-sm font-medium rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-left text-white hover:border-emerald-400/70 hover:bg-emerald-400/10 transition"
     >
       {label}
     </a>
   );
 }
 
-// showHeader = true → header text visible (hub version)
-// showHeader = false → no header (nav/app version)
+// showHeader = true → header visible (hub version)
+// showHeader = false → only the three columns (nav/app version)
 export default function QuoteTool({ showHeader = true }) {
   return (
     <section className="max-w-5xl mx-auto pt-8 text-white">
