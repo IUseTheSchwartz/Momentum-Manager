@@ -13,9 +13,31 @@ function classNames(...parts) {
   return parts.filter(Boolean).join(" ");
 }
 
+// Helper to decide if an email is a Video Hub admin
+function isEmailVideoHubAdmin(emailRaw) {
+  if (!emailRaw) return false;
+  const email = emailRaw.toLowerCase();
+
+  // Read comma-separated admin list from env:
+  // e.g. VITE_VIDEO_HUB_ADMIN_EMAILS="jacobprieto@gmail.com,other@email.com"
+  const envListRaw = import.meta.env.VITE_VIDEO_HUB_ADMIN_EMAILS || "";
+  const list = envListRaw
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (list.length > 0) {
+    return list.includes(email);
+  }
+
+  // Fallback: just you
+  return email === "jacobprieto@gmail.com";
+}
+
 export default function Videos() {
   const [userId, setUserId] = useState(null);
-  const [role, setRole] = useState(null);
+  const [userEmail, setUserEmail] = useState(null);
+  const [role, setRole] = useState(null); // still storing role but not using it for admin
 
   const [activeTab, setActiveTab] = useState("requests"); // "requests" | "received"
 
@@ -23,7 +45,7 @@ export default function Videos() {
   const [myRequests, setMyRequests] = useState([]);
   const [myDeliveries, setMyDeliveries] = useState([]);
 
-  // Manager view
+  // Admin view
   const [queueRequests, setQueueRequests] = useState([]);
   const [agents, setAgents] = useState([]);
 
@@ -36,7 +58,7 @@ export default function Videos() {
   const [reqDriveLink, setReqDriveLink] = useState("");
   const [reqNotes, setReqNotes] = useState("");
 
-  // Send video form (manager)
+  // Send video form (admin)
   const [sendTitle, setSendTitle] = useState("");
   const [sendLink, setSendLink] = useState("");
   const [sendDescription, setSendDescription] = useState("");
@@ -44,12 +66,15 @@ export default function Videos() {
   const [sendTargetMode, setSendTargetMode] = useState("all"); // "all" | "single"
   const [sendTargetUserId, setSendTargetUserId] = useState("");
 
-  const isManager = useMemo(() => role === "manager", [role]);
+  const isVideoHubAdmin = useMemo(
+    () => isEmailVideoHubAdmin(userEmail),
+    [userEmail]
+  );
 
   useEffect(() => {
     let mounted = true;
 
-    const load = async () => {
+    const loadAll = async () => {
       setLoading(true);
       try {
         const { data: s, error: sessErr } = await supabase.auth.getSession();
@@ -60,6 +85,7 @@ export default function Videos() {
         if (!mounted || !user) {
           if (!user) {
             setUserId(null);
+            setUserEmail(null);
             setRole(null);
           }
           setLoading(false);
@@ -67,8 +93,9 @@ export default function Videos() {
         }
 
         setUserId(user.id);
+        setUserEmail(user.email || null);
 
-        // Load role
+        // Load role from user_profiles (not required for admin, but still useful)
         const { data: profile, error: profileErr } = await supabase
           .from("user_profiles")
           .select("role")
@@ -78,9 +105,14 @@ export default function Videos() {
         if (profileErr) {
           console.warn("[Videos] user_profiles error:", profileErr);
         }
+        if (!profile) {
+          console.warn("[Videos] No user_profiles row found for user", user.id);
+        }
 
-        const r = (profile?.role || "").toLowerCase();
-        if (mounted) setRole(r || null);
+        const r = profile?.role || null;
+        if (mounted) {
+          setRole(r);
+        }
 
         // Load my own data
         await Promise.all([
@@ -88,8 +120,8 @@ export default function Videos() {
           loadMyDeliveries(user.id, setMyDeliveries),
         ]);
 
-        // If manager, load queue + agents
-        if (r === "manager") {
+        // If this email is an admin, load queue + agents
+        if (isEmailVideoHubAdmin(user.email || "")) {
           await Promise.all([
             loadQueueRequests(setQueueRequests),
             loadAgents(setAgents),
@@ -100,17 +132,19 @@ export default function Videos() {
       }
     };
 
-    load();
+    loadAll();
 
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       if (!session?.user) {
         setUserId(null);
+        setUserEmail(null);
         setRole(null);
         setMyRequests([]);
         setMyDeliveries([]);
         setQueueRequests([]);
+        setAgents([]);
       } else {
-        load();
+        loadAll();
       }
     });
 
@@ -144,8 +178,6 @@ export default function Videos() {
         owner_user_id: userId,
         title: autoTitle,
         drive_link_raw: reqDriveLink.trim(),
-        approx_minutes: null,
-        platform: null,
         notes: reqNotes.trim(),
         status: "pending",
       });
@@ -167,7 +199,7 @@ export default function Videos() {
   };
 
   const handleUpdateRequestStatus = async (id, status) => {
-    if (!isManager) return;
+    if (!isVideoHubAdmin) return;
     setSavingQueue(true);
     try {
       const { error } = await supabase
@@ -187,7 +219,7 @@ export default function Videos() {
   };
 
   const handleUpdateFinalLink = async (id, value) => {
-    if (!isManager) return;
+    if (!isVideoHubAdmin) return;
     const link = (value || "").trim();
     if (!link) {
       alert("Final video link cannot be empty.");
@@ -216,7 +248,7 @@ export default function Videos() {
 
   const handleSendVideo = async (e) => {
     e.preventDefault();
-    if (!isManager) return;
+    if (!isVideoHubAdmin) return;
 
     if (!sendTitle.trim()) {
       alert("Please add a title for this video.");
@@ -435,9 +467,7 @@ export default function Videos() {
                             {r.created_at && (
                               <p className="text-[11px] text-white/50">
                                 Created{" "}
-                                {new Date(
-                                  r.created_at
-                                ).toLocaleString()}
+                                {new Date(r.created_at).toLocaleString()}
                               </p>
                             )}
                           </div>
@@ -535,11 +565,11 @@ export default function Videos() {
             </section>
           )}
 
-          {/* Manager view */}
-          {isManager && (
+          {/* Admin view (only for configured emails) */}
+          {isVideoHubAdmin && (
             <section className="space-y-4 pt-4 border-t border-white/10 mt-6">
               <h2 className="text-sm font-semibold">
-                Manager tools (edit queue &amp; send videos)
+                Admin tools (edit queue &amp; send videos)
               </h2>
 
               {/* Queue */}
@@ -569,9 +599,7 @@ export default function Videos() {
                             {r.created_at && (
                               <p className="text-[11px] text-white/50">
                                 Created{" "}
-                                {new Date(
-                                  r.created_at
-                                ).toLocaleString()}
+                                {new Date(r.created_at).toLocaleString()}
                               </p>
                             )}
                             <p className="text-[11px] text-white/45">
