@@ -42,6 +42,10 @@ import Reschedule from "./pages/Reschedule.jsx";
 // Debug page
 import Me from "./pages/Me.jsx";
 
+// NEW: Video hub pages
+import VideoHub from "./pages/VideoHub.jsx";   // public marketing / hamburger version
+import Videos from "./pages/Videos.jsx";      // authed in-app version
+
 // Shell
 import Nav from "./components/Nav.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
@@ -78,17 +82,21 @@ export default function App() {
     "/schedule",
     "/thank-you",
     "/reschedule",
+    // NEW: video hub public + in-app pages
+    "/video-hub",
+    "/videos",
   ]);
 
   const isSingleSegment = /^\/[^/]+$/.test(path);
   const isPublicAgentLanding = isSingleSegment && !knownPaths.has(path);
 
-  // "Shell" pages render full-bleed without Nav (schedule, thank-you, reschedule, hub quote tool)
+  // "Shell" pages render full-bleed without Nav (schedule, thank-you, reschedule, hub quote tool, video hub)
   const PUBLIC_SHELL_PATHS = new Set([
     "/schedule",
     "/thank-you",
     "/reschedule",
-    "/quote-tool-hub", // 👈 hub-only quote tool variant (no top Nav)
+    "/quote-tool-hub", // hub-only quote tool variant (no top Nav)
+    "/video-hub",      // NEW: video hub marketing page (hamburger only)
   ]);
   const isPublicShell = isPublicAgentLanding || PUBLIC_SHELL_PATHS.has(path);
 
@@ -104,6 +112,9 @@ export default function App() {
         element={<MomentumLeadManager />}
       />
       <Route path="/get-my-landing-page" element={<GetMyLandingPage />} />
+
+      {/* NEW: public Video Hub landing (hamburger) */}
+      <Route path="/video-hub" element={<VideoHub />} />
 
       {/* Booking flow shells (public, shared across agents) */}
       <Route path="/schedule" element={<Schedule />} />
@@ -128,6 +139,9 @@ export default function App() {
 
         {/* Quote Tool hub variant (no top Nav, but still requires auth) */}
         <Route path="/quote-tool-hub" element={<QuoteToolHub />} />
+
+        {/* NEW: Video Hub inside app shell */}
+        <Route path="/videos" element={<Videos />} />
 
         {/* Agent site (tabbed) */}
         <Route path="/my-landing-page" element={<MyLandingPage />}>
@@ -154,7 +168,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen">
-      {/* Hide Nav on public agent landing + shell pages (schedule, reschedule, hub quote tool) */}
+      {/* Hide Nav on public agent landing + shell pages (schedule, reschedule, hub quote tool, video hub) */}
       {!isPublicShell && <Nav />}
 
       {/* Public shells render full-bleed; app pages use centered container */}
