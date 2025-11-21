@@ -97,7 +97,7 @@ export default function App() {
     "/reschedule",
     "/quote-tool-hub", // hub-only quote tool variant (no top Nav)
     "/video-hub",      // video hub marketing page (hamburger only)
-    "/videos",         // 🔥 make the actual Video Hub tool its own shell page
+    // 🔥 NOTE: /videos is *not* here so it keeps the Momentum header
   ]);
   const isPublicShell = isPublicAgentLanding || PUBLIC_SHELL_PATHS.has(path);
 
