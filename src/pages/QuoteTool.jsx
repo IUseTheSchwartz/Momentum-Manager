@@ -51,15 +51,15 @@ function LinkButton({ label, href }) {
       href={href}
       target="_blank"
       rel="noreferrer"
-      className="w-full text-xs sm:text-sm font-medium rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-left text-[#e6e7ea] hover:border-emerald-400/70 hover:bg-emerald-400/10 transition"
+      className="w-full text-xs sm:text-sm font-medium rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-left hover:border-emerald-400/70 hover:bg-emerald-400/10 transition"
     >
       {label}
     </a>
   );
 }
 
-// showHeader = true → header visible (hub version)
-// showHeader = false → only the three columns (nav/app version)
+// showHeader=true  → full header (hub version)
+// showHeader=false → just the 3 columns (nav/app version)
 export default function QuoteTool({ showHeader = true }) {
   return (
     <section className="max-w-5xl mx-auto pt-8 text-white">
@@ -73,8 +73,8 @@ export default function QuoteTool({ showHeader = true }) {
           </h1>
           <p className="text-sm sm:text-base text-white/70 mb-8 max-w-2xl">
             One place for your carrier quoters, cheat sheets, and e-app portals.
-            Use this page while you&apos;re in the sit so you aren&apos;t digging
-            through bookmarks.
+            Use this page while you&apos;re in the sit so you aren&apos;t
+            digging through bookmarks.
           </p>
         </>
       )}
