@@ -60,13 +60,6 @@ export default function HubHamburger() {
             >
               Quote Tool
             </Link>
-            <Link
-              to="/get-my-landing-page"
-              className="block px-4 py-2 hover:bg-white/5"
-              onClick={() => setMenuOpen(false)}
-            >
-              Get My Landing Page
-            </Link>
 
             <div className="border-t border-white/10 mt-1" />
 
