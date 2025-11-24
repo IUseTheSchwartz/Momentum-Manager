@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient.js";
 
 const DEFAULT_INTRO_VIDEO_URL = "https://www.youtube.com/watch?v=Co1LfteWE8I";
-// Storage bucket for headshots
+// Storage bucket for headshots + logos
 const HEADSHOT_BUCKET = "mm_agent_assets";
 
 function slugFromName(name) {
@@ -12,30 +12,6 @@ function slugFromName(name) {
   return trimmed
     .replace(/[^a-z0-9\s]/g, "")
     .replace(/\s+/g, "-");
-}
-
-// Normalize either a full URL or @handle into full URL
-function normalizeSocial(value, kind) {
-  const raw = (value || "").trim();
-  if (!raw) return "";
-
-  // Already a URL
-  if (raw.startsWith("http://") || raw.startsWith("https://")) {
-    return raw;
-  }
-
-  const handle = raw.startsWith("@") ? raw.slice(1) : raw;
-
-  switch (kind) {
-    case "youtube":
-      return `https://youtube.com/@${handle}`;
-    case "instagram":
-      return `https://instagram.com/${handle}`;
-    case "snapchat":
-      return `https://snapchat.com/add/${handle}`;
-    default:
-      return raw;
-  }
 }
 
 export default function AgentSettings() {
@@ -49,6 +25,10 @@ export default function AgentSettings() {
   const [headshotPreview, setHeadshotPreview] = useState("");
   const [headshotError, setHeadshotError] = useState("");
 
+  const [headerLogoFile, setHeaderLogoFile] = useState(null);
+  const [headerLogoPreview, setHeaderLogoPreview] = useState("");
+  const [headerLogoError, setHeaderLogoError] = useState("");
+
   const [notificationEmails, setNotificationEmails] = useState("");
   const [agentPhone, setAgentPhone] = useState("");
   const [heroTitle, setHeroTitle] = useState("");
@@ -56,9 +36,7 @@ export default function AgentSettings() {
   const [aboutName, setAboutName] = useState("");
   const [aboutBio, setAboutBio] = useState("");
   const [heroYoutubeUrl, setHeroYoutubeUrl] = useState("");
-  const [socialYoutube, setSocialYoutube] = useState("");
-  const [socialInstagram, setSocialInstagram] = useState("");
-  const [socialSnapchat, setSocialSnapchat] = useState("");
+  const [headerBrandName, setHeaderBrandName] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -121,6 +99,8 @@ export default function AgentSettings() {
             notification_emails: user.email || "",
             is_active: true,
             show_proof: true,
+            header_brand_name: "Momentum Financial",
+            header_logo_url: "/logo.png",
           })
           .select("*")
           .single();
@@ -149,10 +129,13 @@ export default function AgentSettings() {
       setHeroYoutubeUrl(
         siteRow.hero_youtube_url || DEFAULT_INTRO_VIDEO_URL
       );
-      setSocialYoutube(siteRow.social_youtube_url || "");
-      setSocialInstagram(siteRow.social_instagram_url || "");
-      setSocialSnapchat(siteRow.social_snapchat_url || "");
+      setHeaderBrandName(
+        siteRow.header_brand_name || "Momentum Financial"
+      );
+
       setHeadshotPreview(siteRow.headshot_url || "");
+      setHeaderLogoPreview(siteRow.header_logo_url || "/logo.png");
+
       setLoading(false);
     }
 
@@ -175,6 +158,18 @@ export default function AgentSettings() {
     }
   }
 
+  function handleHeaderLogoChange(e) {
+    const file = e.target.files?.[0] || null;
+    setHeaderLogoError("");
+    setHeaderLogoFile(file);
+    if (file) {
+      const url = URL.createObjectURL(file);
+      setHeaderLogoPreview(url);
+    } else {
+      setHeaderLogoPreview(site?.header_logo_url || "/logo.png");
+    }
+  }
+
   // Slug preview: prefer name-derived slug, fall back to existing site slug
   const slug = useMemo(() => {
     const fromName = slugFromName(aboutName);
@@ -186,7 +181,7 @@ export default function AgentSettings() {
   const siteUrl = `https://momentummanager.net/${slug}`;
   const previewSiteName = `${
     aboutName || site?.about_name || "Your Name"
-  } | Momentum Financial`;
+  } | ${headerBrandName || "Momentum Financial"}`;
 
   async function uploadHeadshotIfNeeded(currentSite) {
     if (!headshotFile || !currentSite) return currentSite.headshot_url || "";
@@ -209,7 +204,6 @@ export default function AgentSettings() {
         throw uploadErr;
       }
 
-      // Use the path we just uploaded to (works in v1 + v2)
       const { data: publicUrlData } = supabase.storage
         .from(HEADSHOT_BUCKET)
         .getPublicUrl(path);
@@ -228,6 +222,46 @@ export default function AgentSettings() {
     }
   }
 
+  async function uploadHeaderLogoIfNeeded(currentSite) {
+    if (!headerLogoFile || !currentSite)
+      return currentSite.header_logo_url || "/logo.png";
+
+    try {
+      const ext =
+        headerLogoFile.name.split(".").pop()?.toLowerCase() || "png";
+      const path = `logos/${currentSite.id}-${Date.now()}.${ext}`;
+
+      const { error: uploadErr } = await supabase.storage
+        .from(HEADSHOT_BUCKET)
+        .upload(path, headerLogoFile, {
+          contentType: headerLogoFile.type || "image/png",
+          upsert: true,
+        });
+
+      if (uploadErr) {
+        console.error("[AgentSettings] header logo upload error", uploadErr);
+        setHeaderLogoError("Failed to upload header logo.");
+        throw uploadErr;
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from(HEADSHOT_BUCKET)
+        .getPublicUrl(path);
+
+      const publicUrl = publicUrlData?.publicUrl || "";
+      if (!publicUrl) {
+        setHeaderLogoError("Failed to get header logo URL.");
+        throw new Error("No public URL from Supabase");
+      }
+
+      return publicUrl;
+    } catch (e) {
+      console.error("[AgentSettings] header logo upload error", e);
+      setHeaderLogoError("Failed to process header logo.");
+      throw e;
+    }
+  }
+
   async function submit(e) {
     e.preventDefault();
     if (!site) return;
@@ -238,19 +272,9 @@ export default function AgentSettings() {
       // New slug we will actually save
       const newSlug = slugFromName(aboutName) || site.slug || slug;
 
-      // Normalize socials from URL or @handle
-      const normalizedYoutube = normalizeSocial(socialYoutube, "youtube");
-      const normalizedInstagram = normalizeSocial(
-        socialInstagram,
-        "instagram"
-      );
-      const normalizedSnapchat = normalizeSocial(
-        socialSnapchat,
-        "snapchat"
-      );
-
-      // Upload headshot if needed
+      // Upload assets if needed
       const headshotUrl = await uploadHeadshotIfNeeded(site);
+      const headerLogoUrl = await uploadHeaderLogoIfNeeded(site);
 
       const updates = {
         notification_emails: notificationEmails,
@@ -260,10 +284,9 @@ export default function AgentSettings() {
         about_name: aboutName,
         about_bio: aboutBio,
         hero_youtube_url: heroYoutubeUrl,
-        social_youtube_url: normalizedYoutube,
-        social_instagram_url: normalizedInstagram,
-        social_snapchat_url: normalizedSnapchat,
         headshot_url: headshotUrl,
+        header_brand_name: headerBrandName || "Momentum Financial",
+        header_logo_url: headerLogoUrl,
         slug: newSlug,
         updated_at: new Date().toISOString(),
       };
@@ -279,11 +302,15 @@ export default function AgentSettings() {
 
       setSite(data);
       setHeadshotPreview(data.headshot_url || headshotPreview);
+      setHeaderLogoPreview(data.header_logo_url || headerLogoPreview);
+      setHeaderBrandName(
+        data.header_brand_name || headerBrandName || "Momentum Financial"
+      );
+
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
       console.error(err);
-      // If upload failed, error message may already be in headshotError
       setError("Failed to save settings.");
     } finally {
       setSaving(false);
@@ -474,37 +501,74 @@ export default function AgentSettings() {
         </div>
       </section>
 
-      {/* Socials */}
+      {/* Header branding (replaces old Socials section) */}
       <section className="space-y-3 pt-2 border-t border-white/10">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-white/80">Socials</h2>
+        <h2 className="text-sm font-semibold text-white/80">
+          Header branding
+        </h2>
+
+        {/* Brand name (replaces "Momentum Financial" in header) */}
+        <div className="grid gap-4 md:grid-cols-3 md:items-center">
+          <div className="text-sm text-white/70">
+            <div className="font-semibold mb-1">Brand name (top left)</div>
+            <p className="text-xs text-white/50">
+              This replaces &quot;Momentum Financial&quot; next to your name on
+              the public page header.
+            </p>
+          </div>
+          <div className="md:col-span-2">
+            <input
+              className="w-full p-3 rounded bg-white/5 border border-white/10 text-sm"
+              placeholder="Momentum Financial"
+              value={headerBrandName}
+              onChange={(e) => setHeaderBrandName(e.target.value)}
+            />
+          </div>
         </div>
 
-        <div className="grid gap-3">
-          <input
-            className="w-full p-3 rounded bg-white/5 border border-white/10 text-sm"
-            placeholder="YouTube URL or @handle"
-            value={socialYoutube}
-            onChange={(e) => setSocialYoutube(e.target.value)}
-          />
-          <input
-            className="w-full p-3 rounded bg-white/5 border border-white/10 text-sm"
-            placeholder="Instagram URL or @handle"
-            value={socialInstagram}
-            onChange={(e) => setSocialInstagram(e.target.value)}
-          />
-          <input
-            className="w-full p-3 rounded bg-white/5 border border-white/10 text-sm"
-            placeholder="Snapchat URL or @handle"
-            value={socialSnapchat}
-            onChange={(e) => setSocialSnapchat(e.target.value)}
-          />
+        {/* Header logo */}
+        <div className="grid gap-4 md:grid-cols-3 md:items-start">
+          <div className="text-sm text-white/70">
+            <div className="font-semibold mb-1">Header logo</div>
+            <p className="text-xs text-white/50">
+              This logo appears in the top-left of your recruiting page. Leave
+              blank to keep the Momentum logo.
+            </p>
+            {headerLogoError && (
+              <p className="text-xs text-red-400 mt-1">{headerLogoError}</p>
+            )}
+          </div>
+          <div className="md:col-span-2 space-y-3">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-lg bg-white/5 overflow-hidden flex items-center justify-center">
+                {headerLogoPreview ? (
+                  <img
+                    src={headerLogoPreview}
+                    alt="Header logo preview"
+                    className="w-full h-full object-contain"
+                  />
+                ) : (
+                  <span className="text-[10px] text-white/40 text-center px-1">
+                    No logo
+                  </span>
+                )}
+              </div>
+              <div className="flex-1">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleHeaderLogoChange}
+                  className="block w-full text-sm text-white/70 file:mr-3 file:py-2 file:px-4 file:rounded file:border-0 file:bg-white/10 file:text-white hover:file:bg-white/20"
+                />
+                {headerLogoFile && (
+                  <p className="text-xs text-white/50 mt-1">
+                    Selected: {headerLogoFile.name}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
-
-        <p className="text-xs text-white/50">
-          You can paste full links or just your @username. We&apos;ll save the
-          proper URLs for you.
-        </p>
       </section>
 
       {/* Site URL preview */}
