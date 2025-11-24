@@ -236,8 +236,14 @@ export default function AgentPublicLanding() {
     return { primary, accent };
   }, [site]);
 
-  const siteName = site?.site_name || "Momentum Financial";
+  const BASE_BRAND_NAME = "Momentum Financial";
+  const siteName = site?.site_name || BASE_BRAND_NAME;
   const pageOwner = site?.about_name || "Your Mentor";
+  const headerLogo = site?.header_logo_url || "/logo.png";
+  const isCustomBrand =
+    siteName &&
+    siteName.trim().length > 0 &&
+    siteName.trim() !== BASE_BRAND_NAME;
 
   /* ---------------------- Modal helpers ---------------------- */
 
@@ -380,7 +386,13 @@ export default function AgentPublicLanding() {
     );
   }
 
-  const carrierNames = ["Americo", "Foresters", "Mutual of Omaha", "Ethos", "Aetna"];
+  const carrierNames = [
+    "Americo",
+    "Foresters",
+    "Mutual of Omaha",
+    "Ethos",
+    "Aetna",
+  ];
 
   return (
     <div
@@ -414,17 +426,33 @@ export default function AgentPublicLanding() {
           {loading ? (
             <Skeleton className="h-9 w-32 rounded" />
           ) : (
-            <img src="/logo.png" alt="Momentum Manager" className="h-9" />
+            <img
+              src={headerLogo}
+              alt={siteName}
+              className="h-9 w-auto object-contain"
+            />
           )}
-          <span className="text-white/60 text-sm sm:text-base">
+          <div className="flex flex-col leading-tight">
             {loading ? (
               <span className="inline-block h-4 w-32 animate-pulse bg-white/10 rounded" />
             ) : (
               <>
-                {pageOwner} | {siteName}
+                <span className="text-white text-sm sm:text-base font-semibold">
+                  {pageOwner}
+                </span>
+                {siteName && (
+                  <span className="text-white/60 text-[11px] sm:text-xs">
+                    {siteName}
+                  </span>
+                )}
+                {isCustomBrand && (
+                  <span className="text-white/40 text-[10px]">
+                    Powered by Momentum Financial
+                  </span>
+                )}
               </>
             )}
-          </span>
+          </div>
         </div>
 
         <nav className="hidden md:flex items-center gap-6 text-sm text-white/70">
@@ -500,7 +528,8 @@ export default function AgentPublicLanding() {
                 </div>
 
                 <h1 className="mt-4 text-3xl sm:text-5xl font-extrabold tracking-tight">
-                  {site?.hero_title || "Jumpstart your career in life insurance"}
+                  {site?.hero_title ||
+                    "Jumpstart your career in life insurance"}
                 </h1>
 
                 <p className="mt-4 text-white/70 text-sm sm:text-base">
@@ -509,10 +538,13 @@ export default function AgentPublicLanding() {
                 </p>
 
                 <ul className="mt-5 space-y-3">
-                  <CheckItem>A clear roadmap from brand-new to top producer</CheckItem>
+                  <CheckItem>
+                    A clear roadmap from brand-new to top producer
+                  </CheckItem>
                   <CheckItem>Daily mentorship and accountability</CheckItem>
                   <CheckItem>
-                    A proven system and leadership that actually cares about your success
+                    A proven system and leadership that actually cares about
+                    your success
                   </CheckItem>
                 </ul>
 
@@ -564,7 +596,8 @@ export default function AgentPublicLanding() {
             Our partnerships with industry leaders
           </h2>
           <p className="mt-2 text-center text-sm text-white/70">
-            Work with trusted, A-rated carriers that actually issue policies and pay fast.
+            Work with trusted, A-rated carriers that actually issue policies and
+            pay fast.
           </p>
 
           <div className="momentum-marquee mt-6 rounded-2xl border border-white/10 bg-black/30 py-4">
@@ -577,7 +610,10 @@ export default function AgentPublicLanding() {
         </section>
 
         {/* WHY SECTION */}
-        <section id="why" className="mt-20 grid gap-10 lg:grid-cols-2 items-center">
+        <section
+          id="why"
+          className="mt-20 grid gap-10 lg:grid-cols-2 items-center"
+        >
           {loading ? (
             <>
               <div>
@@ -597,9 +633,9 @@ export default function AgentPublicLanding() {
                   Why agents choose this team
                 </h2>
                 <p className="mt-3 text-sm sm:text-base text-white/75">
-                  You&apos;re not just joining a random downline. You&apos;re plugging
-                  into a system with {pageOwner} and a team that&apos;s still in the field
-                  doing the work every day.
+                  You&apos;re not just joining a random downline. You&apos;re
+                  plugging into a system with {pageOwner} and a team that&apos;s
+                  still in the field doing the work every day.
                 </p>
 
                 <ul className="mt-5 space-y-3">
@@ -608,8 +644,8 @@ export default function AgentPublicLanding() {
                     A culture that rewards effort, coachability, and results
                   </CheckItem>
                   <CheckItem>
-                    Work from anywhere with leaders and teammates online all day actually
-                    doing the work
+                    Work from anywhere with leaders and teammates online all day
+                    actually doing the work
                   </CheckItem>
                 </ul>
 
@@ -649,10 +685,12 @@ export default function AgentPublicLanding() {
 
         {/* WHAT YOU GET */}
         <section id="what-you-get" className="mt-20">
-          <h2 className="text-2xl sm:text-3xl font-bold">What you get when you join</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold">
+            What you get when you join
+          </h2>
           <p className="mt-2 text-sm sm:text-base text-white/75">
-            You&apos;re not just joining an agency. You&apos;re plugging into a system
-            built for closers.
+            You&apos;re not just joining an agency. You&apos;re plugging into a
+            system built for closers.
           </p>
 
           <div className="mt-8 grid gap-6 md:grid-cols-3">
@@ -661,11 +699,13 @@ export default function AgentPublicLanding() {
               <div className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#00A160]/15 text-[#00A160]">
                 ✓
               </div>
-              <h3 className="font-semibold text-lg mb-2">Access to high quality leads</h3>
+              <h3 className="font-semibold text-lg mb-2">
+                Access to high quality leads
+              </h3>
               <p className="text-sm text-white/75 flex-1">
-                Plug into a steady flow of people who already requested coverage, so
-                you&apos;re spending your time helping families instead of cold-calling
-                random lists.
+                Plug into a steady flow of people who already requested
+                coverage, so you&apos;re spending your time helping families
+                instead of cold-calling random lists.
               </p>
               <button
                 onClick={openModal}
@@ -684,8 +724,9 @@ export default function AgentPublicLanding() {
                 Live dials, one-on-one coaching &amp; mentorship
               </h3>
               <p className="text-sm text-white/75 flex-1">
-                Join live dials, get real feedback, and work directly with people who are
-                in the field every day so you always know exactly what to say and do.
+                Join live dials, get real feedback, and work directly with
+                people who are in the field every day so you always know exactly
+                what to say and do.
               </p>
               <button
                 onClick={openModal}
@@ -704,9 +745,9 @@ export default function AgentPublicLanding() {
                 A team that actually cares about your success
               </h3>
               <p className="text-sm text-white/75 flex-1">
-                People on every day, all day, doing the work and showing results. You&apos;ll
-                see what works in real time and never feel like you&apos;re doing this
-                alone.
+                People on every day, all day, doing the work and showing
+                results. You&apos;ll see what works in real time and never feel
+                like you&apos;re doing this alone.
               </p>
               <button
                 onClick={openModal}
@@ -755,15 +796,21 @@ export default function AgentPublicLanding() {
         <section id="results" className="mt-20">
           <div className="grid gap-8 lg:grid-cols-2 items-start">
             <div>
-              <h2 className="text-2xl sm:text-3xl font-bold">Live sales from our team</h2>
+              <h2 className="text-2xl sm:text-3xl font-bold">
+                Live sales from our team
+              </h2>
               <p className="mt-3 text-sm sm:text-base text-white/75">
-                This isn&apos;t a collage of old screenshots. The feed you&apos;re seeing
-                is powered by our internal systems and updates as our agents write new
-                business.
+                This isn&apos;t a collage of old screenshots. The feed
+                you&apos;re seeing is powered by our internal systems and
+                updates as our agents write new business.
               </p>
               <ul className="mt-4 space-y-3">
-                <CheckItem>Shows real policies our agents are issuing</CheckItem>
-                <CheckItem>Updates throughout the day as sales come in</CheckItem>
+                <CheckItem>
+                  Shows real policies our agents are issuing
+                </CheckItem>
+                <CheckItem>
+                  Updates throughout the day as sales come in
+                </CheckItem>
               </ul>
 
               <button
@@ -805,21 +852,28 @@ export default function AgentPublicLanding() {
 
         {/* FIT SECTION */}
         <section id="fit" className="mt-20">
-          <h2 className="text-2xl sm:text-3xl font-bold">Is this a fit for you?</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold">
+            Is this a fit for you?
+          </h2>
           <p className="mt-2 text-sm sm:text-base text-white/75">
             We&apos;re not for everyone. Here&apos;s who thrives on this team.
           </p>
 
           <div className="mt-8 grid gap-6 md:grid-cols-2">
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-              <h3 className="font-semibold text-lg mb-3 text-red-300">Not for you if…</h3>
+              <h3 className="font-semibold text-lg mb-3 text-red-300">
+                Not for you if…
+              </h3>
               <ul className="space-y-3 text-sm text-white/75">
                 <li>• You want a salary or hourly job with no upside.</li>
                 <li>
-                  • You&apos;re not willing to study, get licensed, and show up to
-                  training.
+                  • You&apos;re not willing to study, get licensed, and show up
+                  to training.
                 </li>
-                <li>• You&apos;re looking for easy money without putting in real work.</li>
+                <li>
+                  • You&apos;re looking for easy money without putting in real
+                  work.
+                </li>
               </ul>
             </div>
 
@@ -827,12 +881,12 @@ export default function AgentPublicLanding() {
               <h3 className="font-semibold text-lg mb-3 text-[#00C978]">
                 Perfect for you if…
               </h3>
-              <ul className="space-y-3 text-sm text.white/75">
+              <ul className="space-y-3 text-sm text-white/75">
                 <li>• You&apos;re hungry, coachable, and competitive.</li>
                 <li>• You like the idea of being paid directly on results.</li>
                 <li>
-                  • You want daily mentorship and accountability, not just a login and
-                  &quot;good luck&quot;.
+                  • You want daily mentorship and accountability, not just a
+                  login and &quot;good luck&quot;.
                 </li>
               </ul>
             </div>
@@ -840,7 +894,7 @@ export default function AgentPublicLanding() {
 
           <button
             onClick={openModal}
-            className="mt-8 inline-flex w-full sm:w-auto items-center justify.center rounded-xl bg-[#00A160] px-6 py-3 font-semibold text-black shadow hover:bg-[#00C978] active:scale-[.99] transition"
+            className="mt-8 inline-flex w-full sm:w-auto items-center justify-center rounded-xl bg-[#00A160] px-6 py-3 font-semibold text-black shadow hover:bg-[#00C978] active:scale-[.99] transition"
           >
             Join the Team
           </button>
@@ -848,7 +902,9 @@ export default function AgentPublicLanding() {
 
         {/* FAQ SECTION */}
         <section id="faq" className="mt-20">
-          <h2 className="text-2xl sm:text-3xl font-bold">Frequently asked questions</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold">
+            Frequently asked questions
+          </h2>
           <p className="mt-2 text-sm sm:text-base text-white/75">
             A few quick answers before you apply.
           </p>
@@ -858,65 +914,67 @@ export default function AgentPublicLanding() {
               <h3 className="font-semibold text-sm sm:text-base">
                 Do I need a life insurance license already?
               </h3>
-              <p className="mt-2 text-sm text.white/75">
-                No. If you&apos;re not licensed yet, we&apos;ll show you exactly how to
-                get it quickly and what that process looks like.
+              <p className="mt-2 text-sm text-white/75">
+                No. If you&apos;re not licensed yet, we&apos;ll show you exactly
+                how to get it quickly and what that process looks like.
               </p>
             </div>
 
-            <div className="rounded-2xl border border.white/10 bg-white/[0.03] p-4">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
               <h3 className="font-semibold text-sm sm:text-base">
                 Is this commission only?
               </h3>
-              <p className="mt-2 text-sm text.white/75">
-                Yes. That also means there&apos;s no cap on your income. We&apos;ll show
-                you how to ramp up so the numbers make sense.
+              <p className="mt-2 text-sm text-white/75">
+                Yes. That also means there&apos;s no cap on your income.
+                We&apos;ll show you how to ramp up so the numbers make sense.
               </p>
             </div>
 
-            <div className="rounded-2xl border border.white/10 bg-white/[0.03] p-4">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
               <h3 className="font-semibold text-sm sm:text-base">
                 Who will I be talking to?
               </h3>
-              <p className="mt-2 text-sm text.white/75">
-                You&apos;ll be talking to people who have requested information about life
-                insurance – never random cold calls or just your friends and family.
+              <p className="mt-2 text-sm text-white/75">
+                You&apos;ll be talking to people who have requested information
+                about life insurance – never random cold calls or just your
+                friends and family.
               </p>
             </div>
 
-            <div className="rounded-2xl border border.white/10 bg-white/[0.03] p-4">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
               <h3 className="font-semibold text-sm sm:text-base">
                 Can I start part-time?
               </h3>
-              <p className="mt-2 text-sm text.white/75">
-                Many agents start part-time while they get licensed and learn the system,
-                then go full-time once they see the results.
+              <p className="mt-2 text-sm text-white/75">
+                Many agents start part-time while they get licensed and learn
+                the system, then go full-time once they see the results.
               </p>
             </div>
 
-            <div className="rounded-2xl border border.white/10 bg-white/[0.03] p-4">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
               <h3 className="font-semibold text-sm sm:text-base">
                 Where is training held?
               </h3>
-              <p className="mt-2 text-sm text.white/75">
+              <p className="mt-2 text-sm text-white/75">
                 Mostly on Zoom so you can plug in from anywhere.
               </p>
             </div>
 
-            <div className="rounded-2xl border border.white/10 bg-white/[0.03] p-4">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
               <h3 className="font-semibold text-sm sm:text-base">
                 How soon can I realistically start making money?
               </h3>
-              <p className="mt-2 text-sm text.white/75">
-                Once you&apos;re licensed and plugged into the system, we expect you to
-                be in the field and writing business within your first few days.
+              <p className="mt-2 text-sm text-white/75">
+                Once you&apos;re licensed and plugged into the system, we expect
+                you to be in the field and writing business within your first
+                few days.
               </p>
             </div>
           </div>
 
           <button
             onClick={openModal}
-            className="mt-8 inline-flex w-full sm:w-auto items.center justify-center rounded-xl bg-[#00A160] px-6 py-3 font-semibold text-black shadow hover:bg-[#00C978] active:scale-[.99] transition"
+            className="mt-8 inline-flex w-full sm:w-auto items-center justify-center rounded-xl bg-[#00A160] px-6 py-3 font-semibold text-black shadow hover:bg-[#00C978] active:scale-[.99] transition"
           >
             Join the Team
           </button>
@@ -925,10 +983,10 @@ export default function AgentPublicLanding() {
 
       {/* BOOKING MODAL */}
       {open && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items.center justify-center p-4">
-          <div className="w-full max-w-2xl rounded-2xl bg-[#2b2d31] border border.white/10 p-4">
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl rounded-2xl bg-[#2b2d31] border border-white/10 p-4">
             {/* HEADER */}
-            <div className="flex items.center justify-between mb-3">
+            <div className="flex items-center justify-between mb-3">
               <h3 className="text-lg font-semibold">
                 {step === "contact"
                   ? "Start your application"
@@ -948,38 +1006,38 @@ export default function AgentPublicLanding() {
             {step === "contact" && (
               <div className="grid gap-3">
                 <div className="grid gap-2">
-                  <label className="text-sm text.white/70">Full Name</label>
+                  <label className="text-sm text-white/70">Full Name</label>
                   <input
-                    className="w-full rounded-lg bg-black/30 border border.white/10 px-3 py-2 outline-none text-sm"
+                    className="w-full rounded-lg bg-black/30 border border-white/10 px-3 py-2 outline-none text-sm"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     placeholder="John Carter"
                   />
                 </div>
                 <div className="grid gap-2">
-                  <label className="text-sm text.white/70">Phone</label>
+                  <label className="text-sm text-white/70">Phone</label>
                   <input
-                    className="w-full rounded-lg bg-black/30 border border.white/10 px-3 py-2 outline-none text-sm"
+                    className="w-full rounded-lg bg-black/30 border border-white/10 px-3 py-2 outline-none text-sm"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="(555) 555-5555"
                   />
                 </div>
                 <div className="grid gap-2">
-                  <label className="text-sm text.white/70">Email</label>
+                  <label className="text-sm text-white/70">Email</label>
                   <input
                     type="email"
-                    className="w-full rounded-lg bg-black/30 border border.white/10 px-3 py-2 outline-none text-sm"
+                    className="w-full rounded-lg bg-black/30 border border-white/10 px-3 py-2 outline-none text-sm"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@example.com"
                   />
                 </div>
 
-                <div className="flex items.center justify-end gap-2 mt-2">
+                <div className="flex items-center justify-end gap-2 mt-2">
                   <button
                     onClick={closeModal}
-                    className="px-3 py-2 rounded-lg border border.white/15 text-white/80 hover:bg-white/5 text-xs"
+                    className="px-3 py-2 rounded-lg border border-white/15 text-white/80 hover:bg-white/5 text-xs"
                   >
                     Cancel
                   </button>
@@ -991,9 +1049,9 @@ export default function AgentPublicLanding() {
                     {submitting ? "Submitting..." : "Next"}
                   </button>
                 </div>
-                <p className="text-xs text.white/50">
-                  You can finish later; we&apos;ll save your info as an incomplete
-                  application.
+                <p className="text-xs text-white/50">
+                  You can finish later; we&apos;ll save your info as an
+                  incomplete application.
                 </p>
               </div>
             )}
@@ -1003,7 +1061,7 @@ export default function AgentPublicLanding() {
               <div>
                 <button
                   onClick={() => setStep("contact")}
-                  className="text-white/60 hover.text-white mb-3 text-sm"
+                  className="text-white/60 hover:text-white mb-3 text-sm"
                 >
                   ← Back
                 </button>
@@ -1017,17 +1075,17 @@ export default function AgentPublicLanding() {
 
             {/* STEP: DONE (fallback only) */}
             {step === "done" && (
-              <div className="space-y-3 text-sm text.white/80">
+              <div className="space-y-3 text-sm text-white/80">
                 <p>
                   Thanks for applying. Your information has been sent to{" "}
-                  {pageOwner}&apos;s team. They&apos;ll reach out to you about next
-                  steps.
+                  {pageOwner}&apos;s team. They&apos;ll reach out to you about
+                  next steps.
                 </p>
                 <div className="flex justify-end">
                   <button
                     type="button"
                     onClick={closeModal}
-                    className="px-4 py-2 rounded-lg text-xs font-semibold bg.white text-black hover:bg-white/90"
+                    className="px-4 py-2 rounded-lg text-xs font-semibold bg-white text-black hover:bg-white/90"
                   >
                     Close
                   </button>
