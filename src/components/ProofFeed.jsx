@@ -1,6 +1,22 @@
 // File: src/components/ProofFeed.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
+/* ---------------- helpers ---------------- */
+
+function truncate(text = "", maxChars = 120) {
+  const t = String(text || "").trim();
+  if (!t) return "";
+  if (t.length <= maxChars) return t;
+  return t.slice(0, maxChars - 1) + "…";
+}
+
+function truncateName(name = "", maxChars = 22) {
+  const t = String(name || "").trim();
+  if (!t) return "";
+  if (t.length <= maxChars) return t;
+  return t.slice(0, maxChars - 1) + "…";
+}
+
 /** Map your mf_proof_posts row -> UI model (STRICT to your schema) */
 function mapRow(row) {
   // amount_cents -> currency display
@@ -39,9 +55,7 @@ function mapRow(row) {
 
 function initials(name = "") {
   const parts = name.trim().split(/\s+/).slice(0, 2);
-  return (
-    parts.map((p) => p[0]?.toUpperCase() || "").join("") || "MF"
-  );
+  return parts.map((p) => p[0]?.toUpperCase() || "").join("") || "MF";
 }
 
 export default function ProofFeed({
@@ -182,6 +196,9 @@ export default function ProofFeed({
 function DiscordCard({ item, blur, lockedHeight, cardRef, onImageSettled }) {
   const { name, avatar, text, image, amountStr } = item;
 
+  const displayName = truncateName(name);
+  const displayText = truncate(text);
+
   return (
     <div
       ref={cardRef}
@@ -195,8 +212,7 @@ function DiscordCard({ item, blur, lockedHeight, cardRef, onImageSettled }) {
       style={{
         ...(blur
           ? {
-              animation:
-                "pfFade 600ms ease both, pfSlide 600ms ease both",
+              animation: "pfFade 600ms ease both, pfSlide 600ms ease both",
             }
           : {}),
         ...(lockedHeight ? { minHeight: `${lockedHeight}px` } : {}),
@@ -222,21 +238,23 @@ function DiscordCard({ item, blur, lockedHeight, cardRef, onImageSettled }) {
 
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
-            <span className="font-semibold">{name}</span>
+            <span className="font-semibold text-[13px] sm:text-[14px] leading-snug max-w-[60%] truncate">
+              {displayName}
+            </span>
             <div className="ml-auto flex items-center gap-2">
               {/* Pinned badge intentionally not shown here */}
               {amountStr && (
-                <span className="text-xs font-bold px-2 py-0.5 rounded bg-white text-black">
+                <span className="text-xs font-bold px-2 py-0.5 rounded bg-white text-black whitespace-nowrap">
                   {amountStr}
                 </span>
               )}
             </div>
           </div>
 
-          {/* Message body */}
-          {text && (
-            <div className="mt-1 text-[15px] leading-snug text-white/90">
-              {text}
+          {/* Message body (clamped by character count + overflow hidden) */}
+          {displayText && (
+            <div className="mt-1 text-[13px] leading-snug text-white/90 overflow-hidden">
+              {displayText}
             </div>
           )}
 
