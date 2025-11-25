@@ -10,11 +10,38 @@ function truncate(text = "", maxChars = 120) {
   return t.slice(0, maxChars - 1) + "…";
 }
 
-function truncateName(name = "", maxChars = 22) {
-  const t = String(name || "").trim();
+// Take everything to the left of "|" (e.g. "Logan Harris ♟ | MOMENTUM" -> "Logan Harris ♟")
+function cleanName(name = "") {
+  const raw = String(name || "").trim();
+  if (!raw) return "";
+  const [left] = raw.split("|");
+  return left.trim();
+}
+
+// Cut the body at "EFT" + the date line. If no EFT, fall back to a small number of lines / char limit.
+function formatBody(raw = "") {
+  const t = String(raw || "").trim();
   if (!t) return "";
-  if (t.length <= maxChars) return t;
-  return t.slice(0, maxChars - 1) + "…";
+
+  const lines = t.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (!lines.length) return "";
+
+  // Look for an "EFT" line
+  const eftIdx = lines.findIndex((ln) => ln.toUpperCase() === "EFT");
+  if (eftIdx !== -1 && eftIdx + 1 < lines.length) {
+    // Keep everything up through the date line (line after EFT)
+    const kept = lines.slice(0, eftIdx + 2);
+    return kept.join("\n");
+  }
+
+  // Fallback: keep first few lines
+  const maxLines = 4;
+  if (lines.length > maxLines) {
+    return lines.slice(0, maxLines).join("\n");
+  }
+
+  // Final fallback: char-based truncate
+  return truncate(t, 120);
 }
 
 /** Map your mf_proof_posts row -> UI model (STRICT to your schema) */
@@ -161,7 +188,7 @@ export default function ProofFeed({
               key={`${page}-${i}`}
               item={it}
               blur={blurTransition}
-              // Lock min-height so cards never jump between pages
+              // Lock exact height so cards are identical
               lockedHeight={lockedHeight}
               // tap the very first card on the very first slide for measuring
               cardRef={page === 0 && i === 0 ? firstCardRef : undefined}
@@ -196,8 +223,8 @@ export default function ProofFeed({
 function DiscordCard({ item, blur, lockedHeight, cardRef, onImageSettled }) {
   const { name, avatar, text, image, amountStr } = item;
 
-  const displayName = truncateName(name);
-  const displayText = truncate(text);
+  const displayName = cleanName(name);
+  const displayText = formatBody(text);
 
   return (
     <div
@@ -206,7 +233,7 @@ function DiscordCard({ item, blur, lockedHeight, cardRef, onImageSettled }) {
         "rounded-xl border border-white/10 bg-[#2b2d31] p-3",
         "shadow-lg shadow-black/30",
         "transition-all duration-500",
-        "h-full flex flex-col",
+        "flex flex-col overflow-hidden", // overflow-hidden so taller content doesn’t stretch
         blur ? "hover:scale-[1.01]" : "",
       ].join(" ")}
       style={{
@@ -215,7 +242,7 @@ function DiscordCard({ item, blur, lockedHeight, cardRef, onImageSettled }) {
               animation: "pfFade 600ms ease both, pfSlide 600ms ease both",
             }
           : {}),
-        ...(lockedHeight ? { minHeight: `${lockedHeight}px` } : {}),
+        ...(lockedHeight ? { height: `${lockedHeight}px` } : {}), // exact height once measured
       }}
       data-proof-card
     >
@@ -238,7 +265,7 @@ function DiscordCard({ item, blur, lockedHeight, cardRef, onImageSettled }) {
 
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
-            <span className="font-semibold text-[13px] sm:text-[14px] leading-snug max-w-[60%] truncate">
+            <span className="font-semibold text-[13px] sm:text-[14px] leading-snug">
               {displayName}
             </span>
             <div className="ml-auto flex items-center gap-2">
@@ -251,14 +278,14 @@ function DiscordCard({ item, blur, lockedHeight, cardRef, onImageSettled }) {
             </div>
           </div>
 
-          {/* Message body (clamped by character count + overflow hidden) */}
+          {/* Message body (cut after EFT + date) */}
           {displayText && (
-            <div className="mt-1 text-[13px] leading-snug text-white/90 overflow-hidden">
+            <div className="mt-1 text-[13px] leading-snug text-white/90 whitespace-pre-line">
               {displayText}
             </div>
           )}
 
-          {/* Attachment image */}
+          {/* Attachment image (if any) */}
           {image && (
             <div className="mt-2 overflow-hidden rounded-lg border border-white/10">
               <img
@@ -274,7 +301,7 @@ function DiscordCard({ item, blur, lockedHeight, cardRef, onImageSettled }) {
         </div>
       </div>
 
-      {/* stretch to equal height; no divider */}
+      {/* spacer so footer (if you ever add one) sits at bottom */}
       <div className="flex-1" />
 
       <style>{`
