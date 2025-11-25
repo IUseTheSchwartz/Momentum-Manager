@@ -10,7 +10,7 @@ function truncate(text = "", maxChars = 120) {
   return t.slice(0, maxChars - 1) + "…";
 }
 
-// Take everything to the left of "|" (e.g. "Logan Harris ♟ | MOMENTUM" -> "Logan Harris ♟")
+// Take everything to the left of "|" (e.g. "Logan Harris ♟ | MOMENT" -> "Logan Harris ♟")
 function cleanName(name = "") {
   const raw = String(name || "").trim();
   if (!raw) return "";
@@ -18,29 +18,52 @@ function cleanName(name = "") {
   return left.trim();
 }
 
-// Cut the body at "EFT" + the date line. If no EFT, fall back to a small number of lines / char limit.
+// Cut the body at EFT + date.
+// Handles:
+//   line = "EFT"
+//   line = "EFT ✅"
+//   line = "EFT 12/3"
+//   next line = "12/3"
 function formatBody(raw = "") {
   const t = String(raw || "").trim();
   if (!t) return "";
 
-  const lines = t.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const lines = t
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
   if (!lines.length) return "";
 
-  // Look for an "EFT" line
-  const eftIdx = lines.findIndex((ln) => ln.toUpperCase() === "EFT");
-  if (eftIdx !== -1 && eftIdx + 1 < lines.length) {
-    // Keep everything up through the date line (line after EFT)
-    const kept = lines.slice(0, eftIdx + 2);
-    return kept.join("\n");
+  const dateRegex = /\b\d{1,2}\/\d{1,2}\b/;
+
+  const eftIdx = lines.findIndex((ln) =>
+    ln.toUpperCase().includes("EFT")
+  );
+
+  if (eftIdx !== -1) {
+    const eftLine = lines[eftIdx];
+
+    // Case 1: EFT + date on same line: "EFT 12/3" or "EFT ✅ 12/3"
+    if (dateRegex.test(eftLine)) {
+      return lines.slice(0, eftIdx + 1).join("\n");
+    }
+
+    // Case 2: next line is the date
+    if (eftIdx + 1 < lines.length && dateRegex.test(lines[eftIdx + 1])) {
+      return lines.slice(0, eftIdx + 2).join("\n");
+    }
+
+    // Fallback: keep through EFT line only
+    return lines.slice(0, eftIdx + 1).join("\n");
   }
 
-  // Fallback: keep first few lines
+  // No EFT: keep first few lines or char truncate
   const maxLines = 4;
   if (lines.length > maxLines) {
     return lines.slice(0, maxLines).join("\n");
   }
 
-  // Final fallback: char-based truncate
   return truncate(t, 120);
 }
 
@@ -265,11 +288,11 @@ function DiscordCard({ item, blur, lockedHeight, cardRef, onImageSettled }) {
 
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
-            <span className="font-semibold text-[13px] sm:text-[14px] leading-snug">
+            {/* full name left of "|" visible, no truncation */}
+            <span className="font-semibold text-[13px] sm:text-[14px] leading-tight">
               {displayName}
             </span>
             <div className="ml-auto flex items-center gap-2">
-              {/* Pinned badge intentionally not shown here */}
               {amountStr && (
                 <span className="text-xs font-bold px-2 py-0.5 rounded bg-white text-black whitespace-nowrap">
                   {amountStr}
