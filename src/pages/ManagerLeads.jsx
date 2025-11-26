@@ -5,6 +5,133 @@ import { fmtMDY } from "../lib/dateFmt";
 const LEAD_TYPES = ["FEX", "VET", "IUL", "TRUCKER", "MORTGAGE", "ILC", "FRESH"];
 const PAGE_SIZE = 200;
 
+// Map various state representations -> canonical 2-letter code
+const STATE_CANON = {
+  AL: "AL",
+  ALABAMA: "AL",
+  AK: "AK",
+  ALASKA: "AK",
+  AZ: "AZ",
+  ARIZONA: "AZ",
+  AR: "AR",
+  ARKANSAS: "AR",
+  CA: "CA",
+  CALIFORNIA: "CA",
+  CO: "CO",
+  COLORADO: "CO",
+  CT: "CT",
+  CONNECTICUT: "CT",
+  DE: "DE",
+  DELAWARE: "DE",
+  FL: "FL",
+  FLORIDA: "FL",
+  GA: "GA",
+  GEORGIA: "GA",
+  HI: "HI",
+  HAWAII: "HI",
+  ID: "ID",
+  IDAHO: "ID",
+  IL: "IL",
+  ILLINOIS: "IL",
+  IN: "IN",
+  INDIANA: "IN",
+  IA: "IA",
+  IOWA: "IA",
+  KS: "KS",
+  KANSAS: "KS",
+  KY: "KY",
+  KENTUCKY: "KY",
+  LA: "LA",
+  LOUISIANA: "LA",
+  ME: "ME",
+  MAINE: "ME",
+  MD: "MD",
+  MARYLAND: "MD",
+  MA: "MA",
+  MASSACHUSETTS: "MA",
+  MI: "MI",
+  MICHIGAN: "MI",
+  MN: "MN",
+  MINNESOTA: "MN",
+  MS: "MS",
+  MISSISSIPPI: "MS",
+  MO: "MO",
+  MISSOURI: "MO",
+  MT: "MT",
+  MONTANA: "MT",
+  NE: "NE",
+  NEBRASKA: "NE",
+  NV: "NV",
+  NEVADA: "NV",
+  NH: "NH",
+  "NEW HAMPSHIRE": "NH",
+  NJ: "NJ",
+  "NEW JERSEY": "NJ",
+  NM: "NM",
+  "NEW MEXICO": "NM",
+  NY: "NY",
+  "NEW YORK": "NY",
+  NC: "NC",
+  "NORTH CAROLINA": "NC",
+  ND: "ND",
+  "NORTH DAKOTA": "ND",
+  OH: "OH",
+  OHIO: "OH",
+  OK: "OK",
+  OKLAHOMA: "OK",
+  OR: "OR",
+  OREGON: "OR",
+  PA: "PA",
+  PENNSYLVANIA: "PA",
+  RI: "RI",
+  "RHODE ISLAND": "RI",
+  SC: "SC",
+  "SOUTH CAROLINA": "SC",
+  SD: "SD",
+  "SOUTH DAKOTA": "SD",
+  TN: "TN",
+  TENNESSEE: "TN",
+  TX: "TX",
+  TEXAS: "TX",
+  UT: "UT",
+  UTAH: "UT",
+  VT: "VT",
+  VERMONT: "VT",
+  VA: "VA",
+  VIRGINIA: "VA",
+  WA: "WA",
+  WASHINGTON: "WA",
+  WV: "WV",
+  "WEST VIRGINIA": "WV",
+  WI: "WI",
+  WISCONSIN: "WI",
+  WY: "WY",
+  WYOMING: "WY",
+  DC: "DC",
+  "DISTRICT OF COLUMBIA": "DC",
+};
+
+// Take any messy state string ("Colorado CO", "co", "colorado") and normalize to "CO"
+function normalizeState(raw) {
+  const s = String(raw || "").trim().toUpperCase();
+  if (!s) return "";
+
+  // Exact match first
+  if (STATE_CANON[s]) return STATE_CANON[s];
+
+  // Split on spaces, commas, dashes, slashes and try each token
+  const parts = s.split(/[\s,\/\-]+/).filter(Boolean);
+  for (const part of parts) {
+    if (STATE_CANON[part]) return STATE_CANON[part];
+  }
+
+  // Fallback: if it's already 2 letters, just use it
+  if (s.length === 2) return s;
+
+  // Otherwise we don't know it, return empty so it won't match as a canonical state
+  return "";
+}
+
 export default function ManagerLeads() {
   const [rows, setRows] = useState([]);
   const [users, setUsers] = useState([]);
@@ -79,29 +206,47 @@ export default function ManagerLeads() {
   }, [stateFilter, typeFilter, onlyUnassigned, search, rows.length]);
 
   const filtered = useMemo(() => {
-    const s = stateFilter.trim().toUpperCase();
+    const sNorm = normalizeState(stateFilter);
     const t = typeFilter.trim().toUpperCase();
-    const q = search.trim().toLowerCase();
+    const qRaw = search.trim();
+    const q = qRaw.toLowerCase();
+    const qStateNorm = normalizeState(qRaw); // allow search box to match by state too
 
     return (rows || []).filter((r) => {
-      const rowState = String(r.state || "").trim().toUpperCase();
+      const rowStateNorm = normalizeState(r.state);
       const rowType = String(r.lead_type || "").trim().toUpperCase();
 
-      if (s && rowState !== s) return false;
+      // State filter with normalization
+      if (sNorm && rowStateNorm !== sNorm) return false;
+
+      // Type filter
       if (t && rowType !== t) return false;
 
       // "Only unassigned" based on status column
       if (onlyUnassigned && r.status === "assigned") return false;
 
       if (!q) return true;
+
       const name = [r.first_name, r.last_name]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
+
+      const phone = (r.phone_e164 || "").toLowerCase();
+      const email = (r.email || "").toLowerCase();
+      const stateStr = String(r.state || "");
+      const stateLower = stateStr.toLowerCase();
+      const rowStateNormForSearch = rowStateNorm;
+
+      const stateMatches =
+        stateLower.includes(q) ||
+        (qStateNorm && rowStateNormForSearch && qStateNorm === rowStateNormForSearch);
+
       return (
         name.includes(q) ||
-        (r.phone_e164 || "").toLowerCase().includes(q) ||
-        (r.email || "").toLowerCase().includes(q)
+        phone.includes(q) ||
+        email.includes(q) ||
+        stateMatches
       );
     });
   }, [rows, stateFilter, typeFilter, onlyUnassigned, search]);
@@ -248,8 +393,7 @@ export default function ManagerLeads() {
           className="rounded bg-white/5 border border-white/10 p-2"
           value={stateFilter}
           onChange={(e) => setStateFilter(e.target.value.toUpperCase())}
-          placeholder="State (e.g., TN)"
-          maxLength={2}
+          placeholder="State (e.g., TN or Tennessee)"
         />
 
         <select
@@ -279,7 +423,7 @@ export default function ManagerLeads() {
           className="rounded bg-white/5 border border-white/10 p-2"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search name/phone/email"
+          placeholder="Search name/phone/email/state"
         />
 
         <div className="col-span-full flex flex-wrap gap-3 items-center">
@@ -290,7 +434,7 @@ export default function ManagerLeads() {
           >
             Quick Assign
           </button>
-          <div className="text-sm text-white/60">{statusMsg}</div>
+          <div className="text-sm text_white/60">{statusMsg}</div>
 
           {/* Pagination controls */}
           <div className="ml-auto flex items-center gap-2 text-xs">
@@ -304,7 +448,7 @@ export default function ManagerLeads() {
             {pageNumbers.map((p) => (
               <button
                 key={p}
-                className={`px-2 py-1 border border-white/10 rounded ${
+                className={`px-2 py-1 border border_white/10 rounded ${
                   p === currentPage ? "bg-white/20" : ""
                 }`}
                 onClick={() => goToPage(p)}
@@ -347,8 +491,7 @@ export default function ManagerLeads() {
             {pageRows.map((l) => (
               <tr key={l.id} className="border-t border-white/10">
                 <td className="px-1 py-1">
-                  {[l.first_name, l.last_name].filter(Boolean).join(" ") ||
-                    "—"}
+                  {[l.first_name, l.last_name].filter(Boolean).join(" ") || "—"}
                 </td>
                 <td className="px-1 py-1">{l.phone_e164 || "—"}</td>
                 <td className="px-1 py-1">{l.email || "—"}</td>
@@ -360,9 +503,7 @@ export default function ManagerLeads() {
                 <td className="px-1 py-1">
                   {(l.age ?? "") !== "" ? l.age : "—"}
                 </td>
-                <td className="px-1 py-1">
-                  {l.beneficiary_name || "—"}
-                </td>
+                <td className="px-1 py-1">{l.beneficiary_name || "—"}</td>
                 <td className="px-1 py-1 capitalize">
                   {l.status.replaceAll("_", " ")}
                 </td>
