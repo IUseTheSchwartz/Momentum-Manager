@@ -24,7 +24,7 @@ import Leads from "./pages/Leads.jsx";
 import TradeCenter from "./pages/TradeCenter.jsx";
 
 // Quote Tool pages
-import QuoteTool from "./pages/QuoteTool.jsx";       // app-shell version
+import QuoteTool from "./pages/QuoteTool.jsx"; // app-shell version
 import QuoteToolHub from "./pages/QuoteToolHub.jsx"; // hamburger / hub version
 
 // Manager pages (gated)
@@ -43,8 +43,8 @@ import Reschedule from "./pages/Reschedule.jsx";
 import Me from "./pages/Me.jsx";
 
 // Video hub pages
-import VideoHub from "./pages/VideoHub.jsx";   // public marketing / hamburger version
-import Videos from "./pages/Videos.jsx";      // authed tool
+import VideoHub from "./pages/VideoHub.jsx"; // public marketing / hamburger version
+import Videos from "./pages/Videos.jsx"; // authed tool
 
 // Shell
 import Nav from "./components/Nav.jsx";
@@ -67,8 +67,8 @@ export default function App() {
     "/me",
     "/leads",
     "/trades",
-    "/quote-tool",       // app-shell quote tool
-    "/quote-tool-hub",   // hub/hamburger quote tool
+    "/quote-tool",     // app-shell quote tool
+    "/quote-tool-hub", // hub/hamburger quote tool
     "/manager",
     "/manager/imports",
     "/manager/leads",
@@ -108,14 +108,14 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/login-agent" element={<AgentLogin />} />
       <Route path="/signup" element={<Signup />} />
-      <Route
-        path="/momentum-lead-manager"
-        element={<MomentumLeadManager />}
-      />
+      <Route path="/momentum-lead-manager" element={<MomentumLeadManager />} />
       <Route path="/get-my-landing-page" element={<GetMyLandingPage />} />
 
       {/* Public Video Hub landing */}
       <Route path="/video-hub" element={<VideoHub />} />
+
+      {/* ✅ Public Quote Tool Hub (OPEN, no auth wall) */}
+      <Route path="/quote-tool-hub" element={<QuoteToolHub />} />
 
       {/* Booking flow shells (public, shared across agents) */}
       <Route path="/schedule" element={<Schedule />} />
@@ -137,9 +137,6 @@ export default function App() {
 
         {/* Quote Tool inside app shell (NO header text here) */}
         <Route path="/quote-tool" element={<QuoteTool showHeader={false} />} />
-
-        {/* Quote Tool hub variant (no top Nav, but still requires auth) */}
-        <Route path="/quote-tool-hub" element={<QuoteToolHub />} />
 
         {/* Video Hub tool (auth) */}
         <Route path="/videos" element={<Videos />} />
@@ -173,11 +170,7 @@ export default function App() {
       {!isPublicShell && <Nav />}
 
       {/* Public shells render full-bleed; app pages use centered container */}
-      {isPublicShell ? (
-        routes
-      ) : (
-        <div className="max-w-6xl mx-auto p-4">{routes}</div>
-      )}
+      {isPublicShell ? routes : <div className="max-w-6xl mx-auto p-4">{routes}</div>}
     </div>
   );
 }
