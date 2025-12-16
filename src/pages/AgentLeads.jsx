@@ -4,6 +4,10 @@ import { supabase } from "../lib/supabaseClient.js";
 
 const STAGES = ["new", "applied", "booked", "no-show", "closed"];
 
+function fmt(ts) {
+  return ts ? new Date(ts).toLocaleString() : "—";
+}
+
 export default function AgentLeads() {
   const [agentSite, setAgentSite] = useState(null);
   const [rows, setRows] = useState([]);
@@ -87,9 +91,8 @@ export default function AgentLeads() {
         })
         .eq("id", id);
       if (error) throw error;
-      setRows((prev) =>
-        prev.map((r) => (r.id === id ? { ...r, stage } : r))
-      );
+
+      setRows((prev) => prev.map((r) => (r.id === id ? { ...r, stage } : r)));
     } catch (e) {
       console.error(e);
       alert("Failed to update stage.");
@@ -98,9 +101,7 @@ export default function AgentLeads() {
     }
   }
 
-  const filtered = rows.filter((r) =>
-    stageFilter ? r.stage === stageFilter : true
-  );
+  const filtered = rows.filter((r) => (stageFilter ? r.stage === stageFilter : true));
 
   if (loading) {
     return (
@@ -117,17 +118,16 @@ export default function AgentLeads() {
 
   return (
     <div className="space-y-4">
-      <header className="flex items-center justify-between gap-3">
+      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold">Leads from your site</h2>
           <p className="text-xs text-white/60">
-            Everyone who fills out the form on your recruiting landing page
-            shows up here.
+            Everyone who fills out the form on your recruiting landing page shows up here.
           </p>
         </div>
 
         <select
-          className="rounded bg-white/5 border border-white/15 px-3 py-2 text-xs"
+          className="w-full sm:w-auto rounded bg-white/5 border border-white/15 px-3 py-2 text-xs"
           value={stageFilter}
           onChange={(e) => setStageFilter(e.target.value)}
         >
@@ -142,46 +142,35 @@ export default function AgentLeads() {
 
       {!filtered.length && (
         <div className="rounded-xl border border-dashed border-white/15 bg-white/[0.02] p-4 text-sm text-white/60">
-          No leads yet. Once someone hits your public page and fills out the
-          form, they&apos;ll appear here.
+          No leads yet. Once someone hits your public page and fills out the form, they&apos;ll appear here.
         </div>
       )}
 
       {filtered.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead className="text-white/60">
-              <tr className="border-b border-white/10">
-                <th className="py-2 text-left">Name</th>
-                <th className="py-2 text-left">Contact</th>
-                <th className="py-2 text-left">Stage</th>
-                <th className="py-2 text-left">Created</th>
-                <th className="py-2 text-left">Last activity</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((r) => (
-                <tr
-                  key={r.id}
-                  className="border-b border-white/5 hover:bg-white/5"
-                >
-                  <td className="py-2 align-top">
-                    <div className="font-semibold text-white/90">
+        <>
+          {/* MOBILE / SMALL SCREENS: stacked "one-piece" cards (no horizontal scroll box) */}
+          <div className="md:hidden -mx-4 px-4 space-y-3">
+            {filtered.map((r) => (
+              <div
+                key={r.id}
+                className="rounded-xl border border-white/10 bg-white/[0.02] p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-white/90 truncate">
                       {r.full_name || "—"}
                     </div>
-                  </td>
-                  <td className="py-2 align-top">
-                    <div>{r.email || "—"}</div>
-                    <div className="text-white/50">{r.phone || ""}</div>
-                  </td>
-                  <td className="py-2 align-top">
+                    <div className="text-[11px] text-white/60 mt-0.5">
+                      Created: <span className="text-white/80">{fmt(r.created_at)}</span>
+                    </div>
+                  </div>
+
+                  <div className="shrink-0">
                     <select
                       className="rounded bg-white/5 border border-white/20 px-2 py-1 text-[11px]"
                       value={r.stage || "new"}
                       disabled={savingId === r.id}
-                      onChange={(e) =>
-                        updateStage(r.id, e.target.value || "new")
-                      }
+                      onChange={(e) => updateStage(r.id, e.target.value || "new")}
                     >
                       {STAGES.map((s) => (
                         <option key={s} value={s}>
@@ -189,22 +178,77 @@ export default function AgentLeads() {
                         </option>
                       ))}
                     </select>
-                  </td>
-                  <td className="py-2 align-top text-white/70">
-                    {r.created_at
-                      ? new Date(r.created_at).toLocaleString()
-                      : "—"}
-                  </td>
-                  <td className="py-2 align-top text-white/70">
-                    {r.last_activity_at
-                      ? new Date(r.last_activity_at).toLocaleString()
-                      : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </div>
+                </div>
+
+                <div className="mt-3 grid grid-cols-1 gap-2 text-[12px]">
+                  <div className="rounded-lg border border-white/10 bg-black/10 px-3 py-2">
+                    <div className="text-[11px] text-white/50">Email</div>
+                    <div className="text-white/85 break-words">{r.email || "—"}</div>
+                  </div>
+
+                  <div className="rounded-lg border border-white/10 bg-black/10 px-3 py-2">
+                    <div className="text-[11px] text-white/50">Phone</div>
+                    <div className="text-white/85 break-words">{r.phone || "—"}</div>
+                  </div>
+
+                  <div className="rounded-lg border border-white/10 bg-black/10 px-3 py-2">
+                    <div className="text-[11px] text-white/50">Last activity</div>
+                    <div className="text-white/80">{fmt(r.last_activity_at)}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* DESKTOP: table */}
+          <div className="hidden md:block">
+            <div className="rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="text-white/60">
+                    <tr className="border-b border-white/10">
+                      <th className="py-2 px-3 text-left">Name</th>
+                      <th className="py-2 px-3 text-left">Contact</th>
+                      <th className="py-2 px-3 text-left">Stage</th>
+                      <th className="py-2 px-3 text-left">Created</th>
+                      <th className="py-2 px-3 text-left">Last activity</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((r) => (
+                      <tr key={r.id} className="border-b border-white/5 hover:bg-white/5">
+                        <td className="py-2 px-3 align-top">
+                          <div className="font-semibold text-white/90">{r.full_name || "—"}</div>
+                        </td>
+                        <td className="py-2 px-3 align-top">
+                          <div>{r.email || "—"}</div>
+                          <div className="text-white/50">{r.phone || ""}</div>
+                        </td>
+                        <td className="py-2 px-3 align-top">
+                          <select
+                            className="rounded bg-white/5 border border-white/20 px-2 py-1 text-[11px]"
+                            value={r.stage || "new"}
+                            disabled={savingId === r.id}
+                            onChange={(e) => updateStage(r.id, e.target.value || "new")}
+                          >
+                            {STAGES.map((s) => (
+                              <option key={s} value={s}>
+                                {s}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="py-2 px-3 align-top text-white/70">{fmt(r.created_at)}</td>
+                        <td className="py-2 px-3 align-top text-white/70">{fmt(r.last_activity_at)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
