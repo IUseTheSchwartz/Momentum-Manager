@@ -90,6 +90,7 @@ export default function AgentLeads() {
           updated_at: new Date().toISOString(),
         })
         .eq("id", id);
+
       if (error) throw error;
 
       setRows((prev) => prev.map((r) => (r.id === id ? { ...r, stage } : r)));
@@ -147,9 +148,10 @@ export default function AgentLeads() {
       )}
 
       {filtered.length > 0 && (
-        <>
-          {/* MOBILE / SMALL SCREENS: stacked "one-piece" cards (no horizontal scroll box) */}
-          <div className="md:hidden -mx-4 px-4 space-y-3">
+        // Full-bleed wrapper (kills side “empty space” caused by any max-width shell)
+        <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen px-3 sm:px-6">
+          {/* One-piece cards on ALL screen sizes */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {filtered.map((r) => (
               <div
                 key={r.id}
@@ -200,55 +202,7 @@ export default function AgentLeads() {
               </div>
             ))}
           </div>
-
-          {/* DESKTOP: table */}
-          <div className="hidden md:block">
-            <div className="rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead className="text-white/60">
-                    <tr className="border-b border-white/10">
-                      <th className="py-2 px-3 text-left">Name</th>
-                      <th className="py-2 px-3 text-left">Contact</th>
-                      <th className="py-2 px-3 text-left">Stage</th>
-                      <th className="py-2 px-3 text-left">Created</th>
-                      <th className="py-2 px-3 text-left">Last activity</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map((r) => (
-                      <tr key={r.id} className="border-b border-white/5 hover:bg-white/5">
-                        <td className="py-2 px-3 align-top">
-                          <div className="font-semibold text-white/90">{r.full_name || "—"}</div>
-                        </td>
-                        <td className="py-2 px-3 align-top">
-                          <div>{r.email || "—"}</div>
-                          <div className="text-white/50">{r.phone || ""}</div>
-                        </td>
-                        <td className="py-2 px-3 align-top">
-                          <select
-                            className="rounded bg-white/5 border border-white/20 px-2 py-1 text-[11px]"
-                            value={r.stage || "new"}
-                            disabled={savingId === r.id}
-                            onChange={(e) => updateStage(r.id, e.target.value || "new")}
-                          >
-                            {STAGES.map((s) => (
-                              <option key={s} value={s}>
-                                {s}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="py-2 px-3 align-top text-white/70">{fmt(r.created_at)}</td>
-                        <td className="py-2 px-3 align-top text-white/70">{fmt(r.last_activity_at)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </>
+        </div>
       )}
     </div>
   );
