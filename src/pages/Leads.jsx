@@ -1,4 +1,4 @@
-// File: src/pages/Leads.jsx (Agent view) — FIXED for smaller screens
+// File: src/pages/Leads.jsx (Agent view) — FIXED for smaller screens + status changing after first select
 import { useEffect, useMemo, useState, Fragment } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { fmtMDY } from "../lib/dateFmt";
@@ -15,6 +15,7 @@ export default function Leads() {
   const [filter, setFilter] = useState("");
   const [activeLead, setActiveLead] = useState(null);
   const [userId, setUserId] = useState(null);
+  const [savingStatusId, setSavingStatusId] = useState(null);
 
   async function loadForUser(uid) {
     if (!uid) {
@@ -73,7 +74,7 @@ export default function Leads() {
     }
 
     // 3) fetch my per-user meta (status/DNC) for these leads
-    let metaMap = new Map();
+    const metaMap = new Map();
     for (let i = 0; i < list.length; i += chunk) {
       const slice = list.slice(i, i + chunk);
       const metaRes = await supabase
@@ -154,29 +155,63 @@ export default function Leads() {
     });
   }, [rows, filter]);
 
+  // ✅ FIXED: update-first, insert-fallback, optimistic UI
   async function setMyStatus(leadId, status) {
     if (!userId) return;
-    const { error } = await supabase
-      .from("lead_user_meta")
-      .upsert({
-        lead_id: leadId,
-        user_id: userId,
-        status,
-        updated_at: new Date().toISOString(),
-      });
 
-    if (!error) {
-      setRows((prev) =>
-        prev.map((r) =>
-          r.id === leadId
-            ? {
-                ...r,
-                my_status: status,
-                my_dnc: status === "do_not_call" ? true : r.my_dnc,
-              }
-            : r
-        )
-      );
+    const nextDnc = status === "do_not_call";
+    setSavingStatusId(leadId);
+
+    // optimistic UI
+    const prevRow = rows.find((r) => r.id === leadId) || null;
+    setRows((prev) =>
+      prev.map((r) =>
+        r.id === leadId
+          ? { ...r, my_status: status, my_dnc: nextDnc }
+          : r
+      )
+    );
+
+    try {
+      const payload = {
+        status,
+        do_not_call: nextDnc,
+        updated_at: new Date().toISOString(),
+      };
+
+      // 1) try UPDATE existing row
+      const upd = await supabase
+        .from("lead_user_meta")
+        .update(payload)
+        .eq("lead_id", leadId)
+        .eq("user_id", userId)
+        .select("lead_id");
+
+      // If update fails OR updates 0 rows, do INSERT
+      if (upd.error || !(upd.data && upd.data.length)) {
+        const ins = await supabase
+          .from("lead_user_meta")
+          .insert({
+            lead_id: leadId,
+            user_id: userId,
+            ...payload,
+          });
+
+        if (ins.error) throw ins.error;
+      }
+    } catch (e) {
+      console.error(e);
+
+      // rollback UI if backend failed
+      if (prevRow) {
+        setRows((prev) =>
+          prev.map((r) => (r.id === leadId ? prevRow : r))
+        );
+      }
+
+      alert("Could not change status. (Likely a permissions/policy issue on updating lead_user_meta.)");
+    } finally {
+      setSavingStatusId(null);
     }
   }
 
@@ -192,7 +227,7 @@ export default function Leads() {
         />
       </div>
 
-      {/* SMALL + MEDIUM: one-piece stacked cards so actions are ALWAYS visible */}
+      {/* SMALL + MEDIUM: cards */}
       <div className="lg:hidden space-y-3">
         {filtered.map((l) => {
           const key = l.my_status || (l.assigned_to ? null : "unassigned");
@@ -206,8 +241,13 @@ export default function Leads() {
           const fullName =
             [l.first_name, l.last_name].filter(Boolean).join(" ") || "—";
 
+          const isSaving = savingStatusId === l.id;
+
           return (
-            <div key={l.id} className={`rounded-xl border border-white/10 bg-white/[0.02] p-4 ${rowClass}`}>
+            <div
+              key={l.id}
+              className={`rounded-xl border border-white/10 bg-white/[0.02] p-4 ${rowClass}`}
+            >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="font-semibold text-white/90 truncate">{fullName}</div>
@@ -263,16 +303,16 @@ export default function Leads() {
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                <button className="btn text-xs" onClick={() => setMyStatus(l.id, "sold")}>
+                <button className="btn text-xs" disabled={isSaving} onClick={() => setMyStatus(l.id, "sold")}>
                   Sold
                 </button>
-                <button className="btn text-xs" onClick={() => setMyStatus(l.id, "no_pickup")}>
+                <button className="btn text-xs" disabled={isSaving} onClick={() => setMyStatus(l.id, "no_pickup")}>
                   No pickup
                 </button>
-                <button className="btn text-xs" onClick={() => setMyStatus(l.id, "appointment")}>
+                <button className="btn text-xs" disabled={isSaving} onClick={() => setMyStatus(l.id, "appointment")}>
                   Appointment
                 </button>
-                <button className="btn text-xs" onClick={() => setMyStatus(l.id, "do_not_call")}>
+                <button className="btn text-xs" disabled={isSaving} onClick={() => setMyStatus(l.id, "do_not_call")}>
                   Don’t call
                 </button>
                 <button className="btn text-xs" onClick={() => setActiveLead(l)}>
@@ -290,7 +330,7 @@ export default function Leads() {
         )}
       </div>
 
-      {/* LARGE+: keep your original table */}
+      {/* LARGE+: table */}
       <div className="hidden lg:block">
         <div className="card">
           <table className="w-full text-sm">
@@ -332,6 +372,8 @@ export default function Leads() {
                   const prettyDay =
                     dateKey && dateKey !== "unknown" ? fmtMDY(dateKey) : "Unknown date";
 
+                  const isSaving = savingStatusId === l.id;
+
                   return (
                     <Fragment key={l.id}>
                       {showDivider && (
@@ -366,19 +408,16 @@ export default function Leads() {
                         </td>
                         <td className="p-3">
                           <div className="flex flex-wrap gap-2">
-                            <button className="btn text-xs" onClick={() => setMyStatus(l.id, "sold")}>
+                            <button className="btn text-xs" disabled={isSaving} onClick={() => setMyStatus(l.id, "sold")}>
                               Sold
                             </button>
-                            <button className="btn text-xs" onClick={() => setMyStatus(l.id, "no_pickup")}>
+                            <button className="btn text-xs" disabled={isSaving} onClick={() => setMyStatus(l.id, "no_pickup")}>
                               No pickup
                             </button>
-                            <button
-                              className="btn text-xs"
-                              onClick={() => setMyStatus(l.id, "appointment")}
-                            >
+                            <button className="btn text-xs" disabled={isSaving} onClick={() => setMyStatus(l.id, "appointment")}>
                               Appointment
                             </button>
-                            <button className="btn text-xs" onClick={() => setMyStatus(l.id, "do_not_call")}>
+                            <button className="btn text-xs" disabled={isSaving} onClick={() => setMyStatus(l.id, "do_not_call")}>
                               Don’t call
                             </button>
                             <button className="btn text-xs" onClick={() => setActiveLead(l)}>
