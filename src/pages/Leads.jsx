@@ -1,4 +1,4 @@
-// File: src/pages/Leads.jsx (Agent view)
+// File: src/pages/Leads.jsx (Agent view) — FIXED for smaller screens
 import { useEffect, useMemo, useState, Fragment } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { fmtMDY } from "../lib/dateFmt";
@@ -17,7 +17,10 @@ export default function Leads() {
   const [userId, setUserId] = useState(null);
 
   async function loadForUser(uid) {
-    if (!uid) { setRows([]); return; }
+    if (!uid) {
+      setRows([]);
+      return;
+    }
 
     const ids = new Set();
     const assignedAtMap = new Map();
@@ -30,10 +33,7 @@ export default function Leads() {
 
     (cur.data || []).forEach((r) => {
       ids.add(r.id);
-      // fallback: if we don't have a lead_assignments row later, we can use created_at
-      if (!assignedAtMap.get(r.id)) {
-        assignedAtMap.set(r.id, r.created_at);
-      }
+      if (!assignedAtMap.get(r.id)) assignedAtMap.set(r.id, r.created_at);
     });
 
     // 2) historically assigned to me (via lead_assignments, with assigned_at)
@@ -47,17 +47,20 @@ export default function Leads() {
       ids.add(r.lead_id);
       const prev = assignedAtMap.get(r.lead_id);
       if (!prev || new Date(r.assigned_at) > new Date(prev)) {
-        // keep the latest assignment time per lead for this agent
         assignedAtMap.set(r.lead_id, r.assigned_at);
       }
     });
 
-    if (!ids.size) { setRows([]); return; }
+    if (!ids.size) {
+      setRows([]);
+      return;
+    }
 
     // fetch details
     const list = Array.from(ids);
     const batched = [];
     const chunk = 500;
+
     for (let i = 0; i < list.length; i += chunk) {
       const slice = list.slice(i, i + chunk);
       const res = await supabase
@@ -78,6 +81,7 @@ export default function Leads() {
         .select("lead_id, status, do_not_call")
         .eq("user_id", uid)
         .in("lead_id", slice);
+
       if (!metaRes.error) {
         (metaRes.data || []).forEach((m) => {
           metaMap.set(m.lead_id, {
@@ -104,7 +108,7 @@ export default function Leads() {
     merged.sort((a, b) => {
       const aT = a.assigned_at ? new Date(a.assigned_at) : new Date(a.created_at);
       const bT = b.assigned_at ? new Date(b.assigned_at) : new Date(b.created_at);
-      return bT - aT; // newest on top
+      return bT - aT;
     });
 
     setRows(merged);
@@ -118,7 +122,7 @@ export default function Leads() {
       await loadForUser(uid);
 
       if (!uid) return;
-      // realtime refresh when my current assignments change
+
       const ch = supabase
         .channel("leads-my-assignments")
         .on(
@@ -127,6 +131,7 @@ export default function Leads() {
           () => loadForUser(uid)
         )
         .subscribe();
+
       return () => {
         supabase.removeChannel(ch);
       };
@@ -149,7 +154,6 @@ export default function Leads() {
     });
   }, [rows, filter]);
 
-  // per-user status setter
   async function setMyStatus(leadId, status) {
     if (!userId) return;
     const { error } = await supabase
@@ -160,6 +164,7 @@ export default function Leads() {
         status,
         updated_at: new Date().toISOString(),
       });
+
     if (!error) {
       setRows((prev) =>
         prev.map((r) =>
@@ -177,138 +182,226 @@ export default function Leads() {
 
   return (
     <div className="mt-6 space-y-4">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <h2 className="text-xl font-semibold">My Leads</h2>
         <input
-          className="ml-auto w-72 p-2 rounded bg-white/5 border border-white/10 text-sm"
+          className="sm:ml-auto w-full sm:w-96 p-2 rounded bg-white/5 border border-white/10 text-sm"
           placeholder="Search name / phone / email / state / type / beneficiary"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         />
       </div>
 
-      <div className="card overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="text-white/60">
-            <tr>
-              <th className="text-left p-3">Name</th>
-              <th className="text-left p-3">Phone</th>
-              <th className="text-left p-3">Email</th>
-              <th className="text-left p-3">State</th>
-              <th className="text-left p-3">Address</th>
-              <th className="text-left p-3">Military</th>
-              <th className="text-left p-3">DOB</th>
-              <th className="text-left p-3">Age</th>
-              <th className="text-left p-3">Lead Type</th>
-              <th className="text-left p-3">Beneficiary</th>
-              <th className="text-left p-3">My Status</th>
-              <th className="text-left p-3">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(() => {
-              let lastDateKey = null;
+      {/* SMALL + MEDIUM: one-piece stacked cards so actions are ALWAYS visible */}
+      <div className="lg:hidden space-y-3">
+        {filtered.map((l) => {
+          const key = l.my_status || (l.assigned_to ? null : "unassigned");
+          const rowClass =
+            key && STATUS_COLORS[key]
+              ? STATUS_COLORS[key]
+              : l.assigned_to
+              ? ""
+              : "opacity-80";
 
-              return filtered.map((l) => {
-                const sourceTs = l.assigned_at || l.created_at;
-                const d = sourceTs ? new Date(sourceTs) : null;
-                const dateKey = d ? d.toISOString().slice(0, 10) : "unknown";
-                const showDivider = dateKey !== lastDateKey;
-                lastDateKey = dateKey;
+          const fullName =
+            [l.first_name, l.last_name].filter(Boolean).join(" ") || "—";
 
-                const key = l.my_status || (l.assigned_to ? null : "unassigned");
-                const rowClass =
-                  key && STATUS_COLORS[key]
-                    ? STATUS_COLORS[key]
-                    : l.assigned_to
-                    ? ""
-                    : "opacity-80";
+          return (
+            <div key={l.id} className={`rounded-xl border border-white/10 bg-white/[0.02] p-4 ${rowClass}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-semibold text-white/90 truncate">{fullName}</div>
+                  <div className="text-xs text-white/60 mt-1">
+                    {l.phone_e164 || "—"}
+                    {l.email ? <span className="text-white/50"> • {l.email}</span> : null}
+                  </div>
+                </div>
 
-                const prettyDay =
-                  dateKey && dateKey !== "unknown" ? fmtMDY(dateKey) : "Unknown date";
+                <div className="shrink-0 text-right">
+                  <div className="text-[11px] text-white/50">My Status</div>
+                  <div className="text-xs capitalize">
+                    {(l.my_status || "—").replaceAll("_", " ")}
+                  </div>
+                </div>
+              </div>
 
-                return (
-                  <Fragment key={l.id}>
-                    {showDivider && (
-                      <tr>
-                        <td colSpan={12} className="pt-6 pb-2">
-                          <div className="flex items-center gap-3">
-                            <div className="flex-1 border-t border-emerald-500/60" />
-                            <span className="text-xs uppercase tracking-wide text-emerald-400">
-                              Assigned on {prettyDay}
-                            </span>
-                            <div className="flex-1 border-t border-emerald-500/60" />
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded-lg border border-white/10 bg-black/10 px-3 py-2">
+                  <div className="text-[11px] text-white/50">State</div>
+                  <div className="text-white/85">{l.state || "—"}</div>
+                </div>
+
+                <div className="rounded-lg border border-white/10 bg-black/10 px-3 py-2">
+                  <div className="text-[11px] text-white/50">Lead Type</div>
+                  <div className="text-white/85">{l.lead_type || "—"}</div>
+                </div>
+
+                <div className="col-span-2 rounded-lg border border-white/10 bg-black/10 px-3 py-2">
+                  <div className="text-[11px] text-white/50">Address</div>
+                  <div className="text-white/85 break-words">{l.address || "—"}</div>
+                </div>
+
+                <div className="rounded-lg border border-white/10 bg-black/10 px-3 py-2">
+                  <div className="text-[11px] text-white/50">DOB</div>
+                  <div className="text-white/85">{fmtMDY(l.dob)}</div>
+                </div>
+
+                <div className="rounded-lg border border-white/10 bg-black/10 px-3 py-2">
+                  <div className="text-[11px] text-white/50">Age</div>
+                  <div className="text-white/85">{(l.age ?? "") !== "" ? l.age : "—"}</div>
+                </div>
+
+                <div className="rounded-lg border border-white/10 bg-black/10 px-3 py-2">
+                  <div className="text-[11px] text-white/50">Military</div>
+                  <div className="text-white/85">{l.military_branch || "—"}</div>
+                </div>
+
+                <div className="rounded-lg border border-white/10 bg-black/10 px-3 py-2">
+                  <div className="text-[11px] text-white/50">Beneficiary</div>
+                  <div className="text-white/85 break-words">{l.beneficiary_name || "—"}</div>
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button className="btn text-xs" onClick={() => setMyStatus(l.id, "sold")}>
+                  Sold
+                </button>
+                <button className="btn text-xs" onClick={() => setMyStatus(l.id, "no_pickup")}>
+                  No pickup
+                </button>
+                <button className="btn text-xs" onClick={() => setMyStatus(l.id, "appointment")}>
+                  Appointment
+                </button>
+                <button className="btn text-xs" onClick={() => setMyStatus(l.id, "do_not_call")}>
+                  Don’t call
+                </button>
+                <button className="btn text-xs" onClick={() => setActiveLead(l)}>
+                  Notes
+                </button>
+              </div>
+            </div>
+          );
+        })}
+
+        {!filtered.length && (
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 text-white/60">
+            No leads yet.
+          </div>
+        )}
+      </div>
+
+      {/* LARGE+: keep your original table */}
+      <div className="hidden lg:block">
+        <div className="card">
+          <table className="w-full text-sm">
+            <thead className="text-white/60">
+              <tr>
+                <th className="text-left p-3">Name</th>
+                <th className="text-left p-3">Phone</th>
+                <th className="text-left p-3">Email</th>
+                <th className="text-left p-3">State</th>
+                <th className="text-left p-3">Address</th>
+                <th className="text-left p-3">Military</th>
+                <th className="text-left p-3">DOB</th>
+                <th className="text-left p-3">Age</th>
+                <th className="text-left p-3">Lead Type</th>
+                <th className="text-left p-3">Beneficiary</th>
+                <th className="text-left p-3">My Status</th>
+                <th className="text-left p-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(() => {
+                let lastDateKey = null;
+
+                return filtered.map((l) => {
+                  const sourceTs = l.assigned_at || l.created_at;
+                  const d = sourceTs ? new Date(sourceTs) : null;
+                  const dateKey = d ? d.toISOString().slice(0, 10) : "unknown";
+                  const showDivider = dateKey !== lastDateKey;
+                  lastDateKey = dateKey;
+
+                  const key = l.my_status || (l.assigned_to ? null : "unassigned");
+                  const rowClass =
+                    key && STATUS_COLORS[key]
+                      ? STATUS_COLORS[key]
+                      : l.assigned_to
+                      ? ""
+                      : "opacity-80";
+
+                  const prettyDay =
+                    dateKey && dateKey !== "unknown" ? fmtMDY(dateKey) : "Unknown date";
+
+                  return (
+                    <Fragment key={l.id}>
+                      {showDivider && (
+                        <tr>
+                          <td colSpan={12} className="pt-6 pb-2">
+                            <div className="flex items-center gap-3">
+                              <div className="flex-1 border-t border-emerald-500/60" />
+                              <span className="text-xs uppercase tracking-wide text-emerald-400">
+                                Assigned on {prettyDay}
+                              </span>
+                              <div className="flex-1 border-t border-emerald-500/60" />
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+
+                      <tr className={`border-t border-white/10 ${rowClass}`}>
+                        <td className="p-3">
+                          {[l.first_name, l.last_name].filter(Boolean).join(" ") || "—"}
+                        </td>
+                        <td className="p-3">{l.phone_e164 || "—"}</td>
+                        <td className="p-3">{l.email || "—"}</td>
+                        <td className="p-3">{l.state || "—"}</td>
+                        <td className="p-3">{l.address || "—"}</td>
+                        <td className="p-3">{l.military_branch || "—"}</td>
+                        <td className="p-3">{fmtMDY(l.dob)}</td>
+                        <td className="p-3">{(l.age ?? "") !== "" ? l.age : "—"}</td>
+                        <td className="p-3">{l.lead_type || "—"}</td>
+                        <td className="p-3">{l.beneficiary_name || "—"}</td>
+                        <td className="p-3 capitalize">
+                          {(l.my_status || "—").replaceAll("_", " ")}
+                        </td>
+                        <td className="p-3">
+                          <div className="flex flex-wrap gap-2">
+                            <button className="btn text-xs" onClick={() => setMyStatus(l.id, "sold")}>
+                              Sold
+                            </button>
+                            <button className="btn text-xs" onClick={() => setMyStatus(l.id, "no_pickup")}>
+                              No pickup
+                            </button>
+                            <button
+                              className="btn text-xs"
+                              onClick={() => setMyStatus(l.id, "appointment")}
+                            >
+                              Appointment
+                            </button>
+                            <button className="btn text-xs" onClick={() => setMyStatus(l.id, "do_not_call")}>
+                              Don’t call
+                            </button>
+                            <button className="btn text-xs" onClick={() => setActiveLead(l)}>
+                              Notes
+                            </button>
                           </div>
                         </td>
                       </tr>
-                    )}
+                    </Fragment>
+                  );
+                });
+              })()}
 
-                    <tr className={`border-t border-white/10 ${rowClass}`}>
-                      <td className="p-3">
-                        {[l.first_name, l.last_name].filter(Boolean).join(" ") || "—"}
-                      </td>
-                      <td className="p-3">{l.phone_e164 || "—"}</td>
-                      <td className="p-3">{l.email || "—"}</td>
-                      <td className="p-3">{l.state || "—"}</td>
-                      <td className="p-3">{l.address || "—"}</td>
-                      <td className="p-3">{l.military_branch || "—"}</td>
-                      <td className="p-3">{fmtMDY(l.dob)}</td>
-                      <td className="p-3">
-                        {(l.age ?? "") !== "" ? l.age : "—"}
-                      </td>
-                      <td className="p-3">{l.lead_type || "—"}</td>
-                      <td className="p-3">{l.beneficiary_name || "—"}</td>
-                      <td className="p-3 capitalize">
-                        {(l.my_status || "—").replaceAll("_", " ")}
-                      </td>
-                      <td className="p-3">
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            className="btn text-xs"
-                            onClick={() => setMyStatus(l.id, "sold")}
-                          >
-                            Sold
-                          </button>
-                          <button
-                            className="btn text-xs"
-                            onClick={() => setMyStatus(l.id, "no_pickup")}
-                          >
-                            No pickup
-                          </button>
-                          <button
-                            className="btn text-xs"
-                            onClick={() => setMyStatus(l.id, "appointment")}
-                          >
-                            Appointment
-                          </button>
-                          <button
-                            className="btn text-xs"
-                            onClick={() => setMyStatus(l.id, "do_not_call")}
-                          >
-                            Don’t call
-                          </button>
-                          <button
-                            className="btn text-xs"
-                            onClick={() => setActiveLead(l)}
-                          >
-                            Notes
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  </Fragment>
-                );
-              });
-            })()}
-            {!filtered.length && (
-              <tr>
-                <td className="p-4 text-white/50" colSpan={12}>
-                  No leads yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              {!filtered.length && (
+                <tr>
+                  <td className="p-4 text-white/50" colSpan={12}>
+                    No leads yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {activeLead && (
@@ -332,7 +425,7 @@ function NotesDrawer({ lead, userId, onClose }) {
         .from("lead_notes")
         .select("id, body, author_id, created_at")
         .eq("lead_id", lead.id)
-        .eq("author_id", userId) // private notes (only mine)
+        .eq("author_id", userId)
         .order("created_at", { ascending: false });
       setItems(data || []);
     })();
@@ -357,8 +450,7 @@ function NotesDrawer({ lead, userId, onClose }) {
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-semibold">
             Notes —{" "}
-            {[lead.first_name, lead.last_name].filter(Boolean).join(" ") ||
-              lead.phone_e164}
+            {[lead.first_name, lead.last_name].filter(Boolean).join(" ") || lead.phone_e164}
           </h3>
           <button className="btn" onClick={onClose}>
             Close
@@ -381,15 +473,11 @@ function NotesDrawer({ lead, userId, onClose }) {
         <div className="overflow-y-auto space-y-2">
           {items.map((n) => (
             <div key={n.id} className="p-2 border border-white/10 rounded">
-              <div className="text-xs text-white/50">
-                {new Date(n.created_at).toLocaleString()}
-              </div>
+              <div className="text-xs text-white/50">{new Date(n.created_at).toLocaleString()}</div>
               <div className="text-sm">{n.body}</div>
             </div>
           ))}
-          {!items.length && (
-            <div className="text-white/60 text-sm">No notes yet.</div>
-          )}
+          {!items.length && <div className="text-white/60 text-sm">No notes yet.</div>}
         </div>
       </div>
     </div>
