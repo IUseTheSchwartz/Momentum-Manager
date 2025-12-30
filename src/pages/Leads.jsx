@@ -17,9 +17,13 @@ export default function Leads() {
   const [userId, setUserId] = useState(null);
   const [savingStatusId, setSavingStatusId] = useState(null);
 
+  // ✅ NEW: selection state for CSV export
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+
   async function loadForUser(uid) {
     if (!uid) {
       setRows([]);
+      setSelectedIds(new Set());
       return;
     }
 
@@ -54,6 +58,7 @@ export default function Leads() {
 
     if (!ids.size) {
       setRows([]);
+      setSelectedIds(new Set());
       return;
     }
 
@@ -113,6 +118,16 @@ export default function Leads() {
     });
 
     setRows(merged);
+
+    // ✅ keep selection only for leads that still exist after refresh
+    setSelectedIds((prev) => {
+      const keep = new Set();
+      const allowed = new Set(merged.map((r) => r.id));
+      prev.forEach((id) => {
+        if (allowed.has(id)) keep.add(id);
+      });
+      return keep;
+    });
   }
 
   useEffect(() => {
@@ -155,6 +170,100 @@ export default function Leads() {
     });
   }, [rows, filter]);
 
+  // ✅ NEW: selection helpers (uses FILTERED list for select-all)
+  const allFilteredSelected = useMemo(() => {
+    if (!filtered.length) return false;
+    for (const r of filtered) {
+      if (!selectedIds.has(r.id)) return false;
+    }
+    return true;
+  }, [filtered, selectedIds]);
+
+  const selectedCount = selectedIds.size;
+
+  function toggleOne(id) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAllFiltered() {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      const shouldSelectAll = !allFilteredSelected;
+      if (shouldSelectAll) {
+        filtered.forEach((r) => next.add(r.id));
+      } else {
+        filtered.forEach((r) => next.delete(r.id));
+      }
+      return next;
+    });
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
+
+  function escapeCsvCell(v) {
+    const s = v == null ? "" : String(v);
+    const needsQuotes = /[",\n\r]/.test(s);
+    const escaped = s.replace(/"/g, '""');
+    return needsQuotes ? `"${escaped}"` : escaped;
+  }
+
+  function downloadSelectedCsv() {
+    const selected = rows.filter((r) => selectedIds.has(r.id));
+    if (!selected.length) return;
+
+    const columns = [
+      { key: "first_name", label: "first_name" },
+      { key: "last_name", label: "last_name" },
+      { key: "phone_e164", label: "phone" },
+      { key: "email", label: "email" },
+      { key: "state", label: "state" },
+      { key: "address", label: "address" },
+      { key: "military_branch", label: "military_branch" },
+      { key: "dob", label: "dob" },
+      { key: "age", label: "age" },
+      { key: "lead_type", label: "lead_type" },
+      { key: "beneficiary_name", label: "beneficiary_name" },
+      { key: "my_status", label: "my_status" },
+      { key: "my_dnc", label: "do_not_call" },
+      { key: "assigned_at", label: "assigned_at" },
+    ];
+
+    const header = columns.map((c) => escapeCsvCell(c.label)).join(",");
+    const lines = selected.map((r) =>
+      columns
+        .map((c) => {
+          const val = r[c.key];
+          return escapeCsvCell(val);
+        })
+        .join(",")
+    );
+
+    const csv = [header, ...lines].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+
+    const ts = new Date();
+    const y = ts.getFullYear();
+    const m = String(ts.getMonth() + 1).padStart(2, "0");
+    const d = String(ts.getDate()).padStart(2, "0");
+    const filename = `my-leads-selected-${y}-${m}-${d}.csv`;
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
   // ✅ FIXED: update-first, insert-fallback, optimistic UI
   async function setMyStatus(leadId, status) {
     if (!userId) return;
@@ -165,11 +274,7 @@ export default function Leads() {
     // optimistic UI
     const prevRow = rows.find((r) => r.id === leadId) || null;
     setRows((prev) =>
-      prev.map((r) =>
-        r.id === leadId
-          ? { ...r, my_status: status, my_dnc: nextDnc }
-          : r
-      )
+      prev.map((r) => (r.id === leadId ? { ...r, my_status: status, my_dnc: nextDnc } : r))
     );
 
     try {
@@ -189,13 +294,11 @@ export default function Leads() {
 
       // If update fails OR updates 0 rows, do INSERT
       if (upd.error || !(upd.data && upd.data.length)) {
-        const ins = await supabase
-          .from("lead_user_meta")
-          .insert({
-            lead_id: leadId,
-            user_id: userId,
-            ...payload,
-          });
+        const ins = await supabase.from("lead_user_meta").insert({
+          lead_id: leadId,
+          user_id: userId,
+          ...payload,
+        });
 
         if (ins.error) throw ins.error;
       }
@@ -204,12 +307,12 @@ export default function Leads() {
 
       // rollback UI if backend failed
       if (prevRow) {
-        setRows((prev) =>
-          prev.map((r) => (r.id === leadId ? prevRow : r))
-        );
+        setRows((prev) => prev.map((r) => (r.id === leadId ? prevRow : r)));
       }
 
-      alert("Could not change status. (Likely a permissions/policy issue on updating lead_user_meta.)");
+      alert(
+        "Could not change status. (Likely a permissions/policy issue on updating lead_user_meta.)"
+      );
     } finally {
       setSavingStatusId(null);
     }
@@ -219,12 +322,45 @@ export default function Leads() {
     <div className="mt-6 space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <h2 className="text-xl font-semibold">My Leads</h2>
-        <input
-          className="sm:ml-auto w-full sm:w-96 p-2 rounded bg-white/5 border border-white/10 text-sm"
-          placeholder="Search name / phone / email / state / type / beneficiary"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-        />
+
+        {/* ✅ NEW: CSV export actions */}
+        <div className="sm:ml-auto flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <div className="flex gap-2">
+            <button
+              className="btn text-xs"
+              onClick={toggleSelectAllFiltered}
+              disabled={!filtered.length}
+              title="Select/Deselect all leads currently shown"
+            >
+              {allFilteredSelected ? "Unselect all (shown)" : "Select all (shown)"}
+            </button>
+
+            <button
+              className="btn text-xs"
+              onClick={downloadSelectedCsv}
+              disabled={!selectedCount}
+              title="Download selected leads as CSV"
+            >
+              Download CSV ({selectedCount})
+            </button>
+
+            <button
+              className="btn text-xs"
+              onClick={clearSelection}
+              disabled={!selectedCount}
+              title="Clear selection"
+            >
+              Clear
+            </button>
+          </div>
+
+          <input
+            className="w-full sm:w-96 p-2 rounded bg-white/5 border border-white/10 text-sm"
+            placeholder="Search name / phone / email / state / type / beneficiary"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          />
+        </div>
       </div>
 
       {/* SMALL + MEDIUM: cards */}
@@ -232,16 +368,11 @@ export default function Leads() {
         {filtered.map((l) => {
           const key = l.my_status || (l.assigned_to ? null : "unassigned");
           const rowClass =
-            key && STATUS_COLORS[key]
-              ? STATUS_COLORS[key]
-              : l.assigned_to
-              ? ""
-              : "opacity-80";
+            key && STATUS_COLORS[key] ? STATUS_COLORS[key] : l.assigned_to ? "" : "opacity-80";
 
-          const fullName =
-            [l.first_name, l.last_name].filter(Boolean).join(" ") || "—";
-
+          const fullName = [l.first_name, l.last_name].filter(Boolean).join(" ") || "—";
           const isSaving = savingStatusId === l.id;
+          const checked = selectedIds.has(l.id);
 
           return (
             <div
@@ -249,19 +380,28 @@ export default function Leads() {
               className={`rounded-xl border border-white/10 bg-white/[0.02] p-4 ${rowClass}`}
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="font-semibold text-white/90 truncate">{fullName}</div>
-                  <div className="text-xs text-white/60 mt-1">
-                    {l.phone_e164 || "—"}
-                    {l.email ? <span className="text-white/50"> • {l.email}</span> : null}
+                <div className="min-w-0 flex items-start gap-3">
+                  {/* ✅ NEW: checkbox */}
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4 accent-emerald-500"
+                    checked={checked}
+                    onChange={() => toggleOne(l.id)}
+                    aria-label={`Select ${fullName}`}
+                  />
+
+                  <div className="min-w-0">
+                    <div className="font-semibold text-white/90 truncate">{fullName}</div>
+                    <div className="text-xs text-white/60 mt-1">
+                      {l.phone_e164 || "—"}
+                      {l.email ? <span className="text-white/50"> • {l.email}</span> : null}
+                    </div>
                   </div>
                 </div>
 
                 <div className="shrink-0 text-right">
                   <div className="text-[11px] text-white/50">My Status</div>
-                  <div className="text-xs capitalize">
-                    {(l.my_status || "—").replaceAll("_", " ")}
-                  </div>
+                  <div className="text-xs capitalize">{(l.my_status || "—").replaceAll("_", " ")}</div>
                 </div>
               </div>
 
@@ -336,6 +476,17 @@ export default function Leads() {
           <table className="w-full text-sm">
             <thead className="text-white/60">
               <tr>
+                {/* ✅ NEW: header checkbox */}
+                <th className="text-left p-3 w-10">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-emerald-500"
+                    checked={allFilteredSelected}
+                    onChange={toggleSelectAllFiltered}
+                    aria-label="Select all shown"
+                  />
+                </th>
+
                 <th className="text-left p-3">Name</th>
                 <th className="text-left p-3">Phone</th>
                 <th className="text-left p-3">Email</th>
@@ -363,22 +514,17 @@ export default function Leads() {
 
                   const key = l.my_status || (l.assigned_to ? null : "unassigned");
                   const rowClass =
-                    key && STATUS_COLORS[key]
-                      ? STATUS_COLORS[key]
-                      : l.assigned_to
-                      ? ""
-                      : "opacity-80";
+                    key && STATUS_COLORS[key] ? STATUS_COLORS[key] : l.assigned_to ? "" : "opacity-80";
 
-                  const prettyDay =
-                    dateKey && dateKey !== "unknown" ? fmtMDY(dateKey) : "Unknown date";
-
+                  const prettyDay = dateKey && dateKey !== "unknown" ? fmtMDY(dateKey) : "Unknown date";
                   const isSaving = savingStatusId === l.id;
+                  const checked = selectedIds.has(l.id);
 
                   return (
                     <Fragment key={l.id}>
                       {showDivider && (
                         <tr>
-                          <td colSpan={12} className="pt-6 pb-2">
+                          <td colSpan={13} className="pt-6 pb-2">
                             <div className="flex items-center gap-3">
                               <div className="flex-1 border-t border-emerald-500/60" />
                               <span className="text-xs uppercase tracking-wide text-emerald-400">
@@ -391,6 +537,17 @@ export default function Leads() {
                       )}
 
                       <tr className={`border-t border-white/10 ${rowClass}`}>
+                        {/* ✅ NEW: row checkbox */}
+                        <td className="p-3">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 accent-emerald-500"
+                            checked={checked}
+                            onChange={() => toggleOne(l.id)}
+                            aria-label={`Select ${[l.first_name, l.last_name].filter(Boolean).join(" ") || l.phone_e164}`}
+                          />
+                        </td>
+
                         <td className="p-3">
                           {[l.first_name, l.last_name].filter(Boolean).join(" ") || "—"}
                         </td>
@@ -403,21 +560,31 @@ export default function Leads() {
                         <td className="p-3">{(l.age ?? "") !== "" ? l.age : "—"}</td>
                         <td className="p-3">{l.lead_type || "—"}</td>
                         <td className="p-3">{l.beneficiary_name || "—"}</td>
-                        <td className="p-3 capitalize">
-                          {(l.my_status || "—").replaceAll("_", " ")}
-                        </td>
+                        <td className="p-3 capitalize">{(l.my_status || "—").replaceAll("_", " ")}</td>
                         <td className="p-3">
                           <div className="flex flex-wrap gap-2">
                             <button className="btn text-xs" disabled={isSaving} onClick={() => setMyStatus(l.id, "sold")}>
                               Sold
                             </button>
-                            <button className="btn text-xs" disabled={isSaving} onClick={() => setMyStatus(l.id, "no_pickup")}>
+                            <button
+                              className="btn text-xs"
+                              disabled={isSaving}
+                              onClick={() => setMyStatus(l.id, "no_pickup")}
+                            >
                               No pickup
                             </button>
-                            <button className="btn text-xs" disabled={isSaving} onClick={() => setMyStatus(l.id, "appointment")}>
+                            <button
+                              className="btn text-xs"
+                              disabled={isSaving}
+                              onClick={() => setMyStatus(l.id, "appointment")}
+                            >
                               Appointment
                             </button>
-                            <button className="btn text-xs" disabled={isSaving} onClick={() => setMyStatus(l.id, "do_not_call")}>
+                            <button
+                              className="btn text-xs"
+                              disabled={isSaving}
+                              onClick={() => setMyStatus(l.id, "do_not_call")}
+                            >
                               Don’t call
                             </button>
                             <button className="btn text-xs" onClick={() => setActiveLead(l)}>
@@ -433,7 +600,7 @@ export default function Leads() {
 
               {!filtered.length && (
                 <tr>
-                  <td className="p-4 text-white/50" colSpan={12}>
+                  <td className="p-4 text-white/50" colSpan={13}>
                     No leads yet.
                   </td>
                 </tr>
@@ -444,11 +611,7 @@ export default function Leads() {
       </div>
 
       {activeLead && (
-        <NotesDrawer
-          lead={activeLead}
-          userId={userId}
-          onClose={() => setActiveLead(null)}
-        />
+        <NotesDrawer lead={activeLead} userId={userId} onClose={() => setActiveLead(null)} />
       )}
     </div>
   );
