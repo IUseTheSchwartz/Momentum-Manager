@@ -53,6 +53,7 @@ export default function HubHamburger() {
             >
               Video Hub
             </Link>
+
             <Link
               to="/quote-tool-hub"
               className="block px-4 py-2 hover:bg-white/5"
@@ -60,6 +61,17 @@ export default function HubHamburger() {
             >
               Quote Tool
             </Link>
+
+            {/* External quick dialer link */}
+            <a
+              href="https://iusetheschwartz.github.io/lead-dialer/"
+              target="_blank"
+              rel="noreferrer"
+              className="block px-4 py-2 hover:bg-white/5"
+              onClick={() => setMenuOpen(false)}
+            >
+              Quick Dialer (Phone Only)
+            </a>
 
             <div className="border-t border-white/10 mt-1" />
 
